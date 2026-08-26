@@ -59,8 +59,8 @@ func _collect() -> void:
 		Kind.OVERDRIVE:
 			arena.apply_overdrive(8.0)
 		Kind.SHIELD:
-			RunState.hp = mini(RunState.hp + 1, RunState.max_hp)
-			arena.hud.refresh_hp()
+			RunState.hp = mini(RunState.hp + 1, arena.player.effective_max_hp())
+			arena.hud.refresh_hp(arena.player.effective_max_hp())
 		Kind.MAGNET:
 			arena.vacuum_all_motes()
 	release()

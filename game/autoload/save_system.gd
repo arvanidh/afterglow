@@ -9,6 +9,7 @@ const DEFAULTS := {
 	"schema": SCHEMA_VERSION,
 	"total_shards": 0,
 	"best_time": 0.0,
+	"best_level": 1,
 	"runs": 0,
 }
 
@@ -37,9 +38,10 @@ func load_save() -> Dictionary:
 	return DEFAULTS.duplicate(true)
 
 
-func mark_run_finished() -> void:
+func mark_run_finished(level_reached := 1) -> void:
 	var data := load_save()
 	data["runs"] = int(data.get("runs", 0)) + 1
 	data["total_shards"] = int(data.get("total_shards", 0)) + RunState.shards
 	data["best_time"] = maxf(float(data.get("best_time", 0.0)), RunState.time_alive)
+	data["best_level"] = maxi(int(data.get("best_level", 1)), level_reached)
 	save(data)

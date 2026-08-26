@@ -10,9 +10,10 @@ var damage := 1
 var active := false
 
 
-func launch(from: Vector2, dir: Vector2) -> void:
+func launch(from: Vector2, dir: Vector2, dmg := 1) -> void:
 	global_position = from
 	velocity = dir * SPEED
+	damage = dmg
 	life = 1.15
 	active = true
 	show()

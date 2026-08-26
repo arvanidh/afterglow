@@ -10,16 +10,23 @@ extends Node2D
 
 func _ready() -> void:
 	GameState.change_state(GameState.State.MENU)
-	version_label.text = "v0.0.3 · levels + guns"
+	version_label.text = "v0.1.0 · OVERDRIVE"
 	var save := SaveSystem.load_save()
 	var runs := int(save.get("runs", 0))
 	if runs > 0:
 		var best := int(save.get("best_time", 0.0))
-		best_label.text = "best %d:%02d  ·  %d runs" % [best / 60, best % 60, runs]
+		var best_lv := int(save.get("best_level", 1))
+		best_label.text = "best %d:%02d  ·  LV %d  ·  %d runs" % [best / 60, best % 60, best_lv, runs]
 	else:
 		best_label.text = ""
 	_pulse(title, 1.2)
 	_pulse(hint, 0.75)
+	var controls := Label.new()
+	controls.text = "left thumb anywhere to move  ·  tap ◆ to dash"
+	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	controls.add_theme_font_size_override("font_size", 15)
+	controls.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
+	$UI/CenterBox/VBox.add_child(controls)
 
 
 func _pulse(item: CanvasItem, period: float) -> void:

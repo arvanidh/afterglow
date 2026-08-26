@@ -10,12 +10,14 @@ const MAX_PULL_SPEED := 720.0
 
 var arena: Node = null
 var active := false
+var value := 1
 var force_pull := false  # Magnet Storm powerup
 var _vel := Vector2.ZERO
 var _t := 0.0
 
 
-func drop(at: Vector2) -> void:
+func drop(at: Vector2, p_value := 1) -> void:
+	value = p_value
 	global_position = at + Vector2(randf_range(-8, 8), randf_range(-8, 8))
 	_vel = Vector2.ZERO
 	_t = randf() * TAU
@@ -33,14 +35,15 @@ func _process(delta: float) -> void:
 		return
 	_t += delta * 4.0
 	var player: Node2D = arena.player
+	var reach := float(MAGNET_RANGE) * float(player.mods.get("magnet_mult", 1.0))
 	var d := global_position.distance_to(player.global_position)
-	if force_pull or d < MAGNET_RANGE:
+	if force_pull or d < reach:
 		_vel = _vel.move_toward((player.global_position - global_position).normalized() * MAX_PULL_SPEED, PULL_ACCEL * delta)
 	else:
 		_vel = _vel.move_toward(Vector2.ZERO, 800.0 * delta)
 	global_position += _vel * delta
 	if d < COLLECT_RANGE:
-		RunState.add_shards(1)
+		arena.collect_mote(value)
 		release()
 	queue_redraw()
 
