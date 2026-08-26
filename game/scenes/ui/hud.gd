@@ -14,6 +14,7 @@ var time_label: Label
 var level_label: Label
 var kills_label: Label
 var motes_label: Label
+var gems_label: Label
 var gun_label: Label
 var powerup_label: Label
 var combo_label: Label
@@ -50,6 +51,9 @@ func _ready() -> void:
 	motes_label = _label("◆ 0", 20, AMBER)
 	_anchor(motes_label, 1.0, 0.0, -140, -16, 16, 44)
 	motes_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	gems_label = _label("◆ 0", 18, Color(1.0, 0.72, 0.0))
+	_anchor(gems_label, 1.0, 0.0, -140, -16, 46, 70)
+	gems_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 	gun_label = _label("PULSE BOLT", 17, Color(CYAN.r, CYAN.g, CYAN.b, 0.85))
 	_anchor(gun_label, 1.0, 1.0, -240, -16, -46, -20)
@@ -199,6 +203,8 @@ func set_powerup(text: String) -> void:
 func set_xp(frac: float, plevel: int) -> void:
 	_xp_fill.anchor_right = clampf(frac, 0.0, 1.0)
 
+func set_gems(amount: int) -> void:
+	gems_label.text = "◆ %d" % amount
 
 func tick(run_time: float) -> void:
 	var m := int(run_time) / 60

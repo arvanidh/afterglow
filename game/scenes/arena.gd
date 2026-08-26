@@ -75,6 +75,8 @@ func _ready() -> void:
 	player.took_damage.connect(_on_player_took_damage)
 	player.dashed.connect(_on_player_dashed)
 	world.add_child(player)
+	# Apply permanent upgrades from SaveSystem
+	_apply_permanent_upgrades()
 
 	camera = Camera2D.new()
 	camera.position_smoothing_enabled = true
@@ -101,8 +103,14 @@ func _ready() -> void:
 	hud.show_banner("LEVEL 1", Color(0.0, 0.94, 1.0))
 	hud.refresh_hp(player.effective_max_hp())
 	hud.set_xp(0.0, plevel)
+	hud.set_gems(RunState.gems_earned)
 	Analytics.design_event("run_start", {"seed": seed_hex(), "biome": "promenade"})
 
+
+func _apply_permanent_upgrades() -> void:
+	var hp_bonus := SaveSystem.get_upgrade_level("max_hp")
+	RunState.max_hp = 3 + hp_bonus
+	RunState.hp = RunState.max_hp
 
 func seed_hex() -> String:
 	return "%05X" % (absi(run_seed) % 1048576)
@@ -177,11 +185,14 @@ func _level_cleared() -> void:
 	hud.refresh_hp(player.effective_max_hp())
 	Audio.play("level_clear", -2.0)
 	hud.show_banner("LEVEL %d CLEAR  ·  +1 HP" % level, Color(1.0, 0.72, 0.0), 1.5)
+	# Bonus gem drop on level clear
 	Analytics.design_event("level_clear", {"level": level})
 	_clear_drop_flip = not _clear_drop_flip
 	var kind: Pickup.Kind = Pickup.Kind.CRATE if _clear_drop_flip else _random_orb_kind()
 	var offset := Vector2.from_angle(rng.randf() * TAU) * 60.0
 	_acquire_pickup().spawn(kind, player.global_position + offset)
+	RunState.add_gems(2)
+	hud.spawn_float(player.global_position, "+2 GEMS", Color(1.0, 0.72, 0.0))
 
 
 func remaining_count() -> int:
@@ -332,6 +343,7 @@ func _apply_card(card: Dictionary) -> void:
 	get_tree().paused = false
 	hud.show_banner("+ %s" % String(card["title"]), CardDb.RARITY_COLORS[card["rarity"]], 0.9)
 	hud.set_xp(float(xp) / float(xp_need()), plevel)
+	hud.set_gems(RunState.gems_earned)
 	Analytics.design_event("card_pick", {"card": target, "kind": kind, "plevel": plevel})
 	spawn_ring(player.global_position, 70.0, Color(CardDb.RARITY_COLORS[card["rarity"]].r, CardDb.RARITY_COLORS[card["rarity"]].g, CardDb.RARITY_COLORS[card["rarity"]].b, 0.9))
 
@@ -364,6 +376,7 @@ func _process(delta: float) -> void:
 	grid.track(player.global_position, get_viewport_rect().size * 0.5 + Vector2(80, 80))
 	hud.tick(RunState.run_time)
 	hud.set_xp(float(xp) / float(xp_need()), plevel)
+	hud.set_gems(RunState.gems_earned)
 	hud.fade_vignette(delta)
 	var dfrac := -1.0 if player.dash_cd <= 0.0 else player.dash_cd / (PlayerSpark.DASH_BASE_CD * float(player.mods["dash_cd_mult"]))
 	hud.tick_dash(dfrac)
@@ -496,6 +509,13 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	var gems := int(ShadowEnemy.STATS[e.kind]["gems"]) * (3 if e.elite else 1)
 	for i in range(gems):
 		_acquire_mote().drop(e.global_position, 1)
+		# Gem drops: every 5 kills = 1 gem, elites always = 2 gems
+	if RunState.kills % 5 == 0:
+		RunState.add_gems(1)
+		hud.spawn_float(e.global_position, "+1 GEM", Color(1.0, 0.72, 0.0))
+	elif e.elite:
+		RunState.add_gems(2)
+		hud.spawn_float(e.global_position, "+2 GEMS", Color(1.0, 0.72, 0.0))
 	# drops: elites always pay out; normal shadows rarely
 	if e.elite:
 		_acquire_pickup().spawn(Pickup.Kind.CRATE if rng.randf() < 0.35 else _random_orb_kind(), e.global_position)
@@ -608,6 +628,7 @@ func _begin_death() -> void:
 	if _ending:
 		return
 	_ending = true
+	RunState.deaths += 1
 	get_tree().paused = false
 	Engine.time_scale = 0.25
 	Audio.play("game_over")
@@ -615,7 +636,7 @@ func _begin_death() -> void:
 	await get_tree().create_timer(0.9, true, false, true).timeout
 	Engine.time_scale = 1.0
 	GameState.change_state(GameState.State.RESULTS)
-	SaveSystem.mark_run_finished(level)
+	SaveSystem.mark_run_finished(level, RunState.gems_earned, RunState.run_time)
 	hud.build_results(RunState.run_time, seed_hex(), level)
 	await get_tree().create_timer(0.6, true, false, true).timeout
 	_results_ready = true
