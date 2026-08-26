@@ -10,7 +10,7 @@ extends Node2D
 
 func _ready() -> void:
 	GameState.change_state(GameState.State.MENU)
-	version_label.text = "v0.0.2 · the promenade"
+	version_label.text = "v0.0.3 · levels + guns"
 	var save := SaveSystem.load_save()
 	var runs := int(save.get("runs", 0))
 	if runs > 0:

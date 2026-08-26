@@ -1,18 +1,23 @@
 class_name RunHud
 extends CanvasLayer
-## In-run HUD (§6): timer top-center, kills left, motes right, HP pips bottom.
-## Also owns the damage vignette and the results panel. Safe-area friendly:
-## all elements keep ≥16px insets.
+## In-run HUD (§6): timer top-center, level tracker beneath it, kills left,
+## motes right, gun bottom-right, HP pips bottom-center, banner system for
+## level cards, damage vignette, results panel.
 
 const CYAN := Color(0.0, 0.94, 1.0)
 const DIM := Color(1, 1, 1, 0.45)
 const AMBER := Color(1.0, 0.72, 0.0)
+const MAGENTA := Color(1.0, 0.18, 0.53)
 
 var time_label: Label
+var level_label: Label
 var kills_label: Label
 var motes_label: Label
+var gun_label: Label
+var powerup_label: Label
 var hp_box: HBoxContainer
 var vignette: ColorRect
+var _banner: Label
 
 
 func _ready() -> void:
@@ -21,17 +26,36 @@ func _ready() -> void:
 	time_label = _label("0:00", 34, CYAN)
 	_anchor(time_label, 0.5, 0.0, -90, 90, 14, 62)
 	time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	level_label = _label("LEVEL 1", 15, DIM)
+	_anchor(level_label, 0.5, 0.0, -120, 120, 64, 86)
+	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	kills_label = _label("0 shades", 20, DIM)
 	_anchor(kills_label, 0.0, 0.0, 16, 260, 16, 44)
 	motes_label = _label("◆ 0", 20, AMBER)
 	_anchor(motes_label, 1.0, 0.0, -140, -16, 16, 44)
 	motes_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	gun_label = _label("PULSE BOLT", 17, Color(CYAN.r, CYAN.g, CYAN.b, 0.85))
+	_anchor(gun_label, 1.0, 1.0, -240, -16, -46, -20)
+	gun_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	powerup_label = _label("", 18, MAGENTA)
+	_anchor(powerup_label, 1.0, 1.0, -260, -16, -76, -50)
+	powerup_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hp_box = HBoxContainer.new()
 	hp_box.add_theme_constant_override("separation", 8)
 	_anchor(hp_box, 0.5, 1.0, -110, 110, -40, -18)
 	hp_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(hp_box)
 	refresh_hp()
+
+	_banner = Label.new()
+	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.add_theme_font_size_override("font_size", 46)
+	_banner.add_theme_color_override("font_color", CYAN)
+	_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	_banner.add_theme_constant_override("shadow_offset_y", 3)
+	_anchor(_banner, 0.5, 0.35, -320, 320, -40, 40)
+	_banner.modulate.a = 0.0
+	add_child(_banner)
 
 
 func _build_vignette() -> void:
@@ -67,6 +91,27 @@ func _anchor(c: Control, ax: float, ay: float, ox: int, ox2: int, oy: int, oy2: 
 	c.offset_bottom = oy2
 
 
+func show_banner(text: String, col: Color, hold := 1.1) -> void:
+	_banner.text = text
+	_banner.add_theme_color_override("font_color", col)
+	var tw := create_tween()
+	tw.tween_property(_banner, "modulate:a", 1.0, 0.18)
+	tw.tween_interval(hold)
+	tw.tween_property(_banner, "modulate:a", 0.0, 0.45)
+
+
+func set_level(n: int, remaining: int) -> void:
+	level_label.text = "LEVEL %d  ·  %d left" % [n, remaining]
+
+
+func set_gun(display_name: String) -> void:
+	gun_label.text = display_name.to_upper()
+
+
+func set_powerup(text: String) -> void:
+	powerup_label.text = text
+
+
 func tick(run_time: float) -> void:
 	var m := int(run_time) / 60
 	var s := int(run_time) % 60
@@ -94,7 +139,7 @@ func fade_vignette(delta: float) -> void:
 	vignette.color.a = maxf(0.0, vignette.color.a - delta * 1.4)
 
 
-func build_results(survived: float, seed_hex: String) -> Control:
+func build_results(survived: float, seed_hex: String, level_reached: int) -> Control:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -120,8 +165,8 @@ func build_results(survived: float, seed_hex: String) -> Control:
 	var s := int(survived) % 60
 	var payout := RunState.shards
 
-	box.add_child(_res_label("THE LIGHT WENT OUT", 26, Color(1.0, 0.18, 0.53)))
-	box.add_child(_res_label("survived %d:%02d" % [m, s], 22, Color.WHITE))
+	box.add_child(_res_label("THE LIGHT WENT OUT", 26, MAGENTA))
+	box.add_child(_res_label("reached LEVEL %d  ·  survived %d:%02d" % [level_reached, m, s], 22, Color.WHITE))
 	box.add_child(_res_label("%d shades dispelled   ·   ◆ %d collected" % [RunState.kills, RunState.shards], 16, DIM))
 	box.add_child(_res_label(" ", 6, DIM))
 	box.add_child(_res_label("+%d SHARDS" % payout, 32, AMBER))

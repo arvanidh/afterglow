@@ -10,6 +10,7 @@ const MAX_PULL_SPEED := 720.0
 
 var arena: Node = null
 var active := false
+var force_pull := false  # Magnet Storm powerup
 var _vel := Vector2.ZERO
 var _t := 0.0
 
@@ -33,7 +34,7 @@ func _process(delta: float) -> void:
 	_t += delta * 4.0
 	var player: Node2D = arena.player
 	var d := global_position.distance_to(player.global_position)
-	if d < MAGNET_RANGE:
+	if force_pull or d < MAGNET_RANGE:
 		_vel = _vel.move_toward((player.global_position - global_position).normalized() * MAX_PULL_SPEED, PULL_ACCEL * delta)
 	else:
 		_vel = _vel.move_toward(Vector2.ZERO, 800.0 * delta)

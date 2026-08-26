@@ -1,29 +1,40 @@
 extends Node2D
-## THE PROMENADE — sector 0 (GDD §9 biome 1). Run director: floating joystick
-## (§6), seeded spawn director (§12.3 determinism-lite), pooled entities,
-## collision passes, juice (§7.3 basics), and the results flow.
+## THE PROMENADE — sector 0 (GDD §9 biome 1). v0.0.3: discrete levels with
+## fixed enemy counts (clear → reward → harder), three swappable guns (§5.4),
+## powerup drops, and full juice passes (§7.3).
 
 const MAX_ACTIVE_ENEMIES := 90
 const SPAWN_RING_MIN := 800.0
 const SPAWN_RING_MAX := 920.0
 const JOY_RADIUS := 70.0
+const BETWEEN_LEVELS := 2.6
+
+var _guns: Array[GDScript] = []  # filled in _ready once classes are registered
 
 var world: Node2D
 var grid: GridLayer
 var camera: Camera2D
 var player: PlayerSpark
 var hud: RunHud
+var weapon: Node = null
 
 var rng := RandomNumberGenerator.new()
 var run_seed := 0
-var enemies: Array[ShadowEnemy] = []      # active only
+var enemies: Array[ShadowEnemy] = []
 var _enemy_pool: Array[ShadowEnemy] = []
 var bolts: Array[PulseBolt] = []
 var motes: Array[LightMote] = []
+var pickups: Array[Pickup] = []
+var rings: Array[FxRing] = []
 
-var _weapon: PulseWeapon
-var _spawn_timer := 1.2
-var _pack_timer := 18.0
+var level := 1
+var _spawn_queue: Array[int] = []   # ShadowEnemy.Kind values, pre-shuffled
+var _spawn_timer := 1.0
+var _between_timer := 0.0
+var _in_between := false
+var _clear_drop_flip := false
+var _overdrive_left := 0.0
+
 var _joy_base := Vector2.ZERO
 var _joy_vec := Vector2.ZERO
 var _joy_index := -1
@@ -36,6 +47,7 @@ var _results_ready := false
 func _ready() -> void:
 	run_seed = randi()
 	rng.seed = run_seed
+	_guns = [PulseWeapon, OrbitBlades, NovaBurst]
 	GameState.change_state(GameState.State.RUN)
 
 	world = Node2D.new()
@@ -46,9 +58,6 @@ func _ready() -> void:
 	player = PlayerSpark.new()
 	player.took_damage.connect(_on_player_took_damage)
 	world.add_child(player)
-	_weapon = PulseWeapon.new()
-	_weapon.arena = self
-	player.add_child(_weapon)
 
 	camera = Camera2D.new()
 	camera.position_smoothing_enabled = true
@@ -66,6 +75,10 @@ func _ready() -> void:
 	hud = RunHud.new()
 	add_child(hud)
 
+	_equip_weapon(PulseWeapon)
+	_build_level(1)
+	Audio.play("level_start")
+	hud.show_banner("LEVEL 1", Color(0.0, 0.94, 1.0))
 	Analytics.design_event("run_start", {"seed": seed_hex(), "biome": "promenade"})
 
 
@@ -74,7 +87,163 @@ func seed_hex() -> String:
 
 
 func _exit_tree() -> void:
-	Engine.time_scale = 1.0  # safety — never leak slow-mo across scenes
+	Engine.time_scale = 1.0
+
+
+# ---------------------------------------------------------------- levels (fixed enemy counts per level)
+
+func _build_level(n: int) -> void:
+	_spawn_queue.clear()
+	var shades := mini(4 + n * 2, 34)
+	for i in range(shades):
+		_spawn_queue.append(ShadowEnemy.Kind.SHADE)
+	if n >= 2:
+		var swarmlets := mini((n - 1) * 3, 24)
+		for i in range(swarmlets):
+			_spawn_queue.append(ShadowEnemy.Kind.SWARMLET)
+	# Fisher-Yates with the run's seeded rng — same level layout every replay of a seed.
+	for i in range(_spawn_queue.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp := _spawn_queue[i]
+		_spawn_queue[i] = _spawn_queue[j]
+		_spawn_queue[j] = tmp
+	_in_between = false
+	_spawn_timer = 0.9
+	level = n
+	hud.set_level(n, _spawn_queue.size())
+
+
+func _director(delta: float) -> void:
+	if _ending:
+		return
+	if _in_between:
+		_between_timer -= delta
+		if _between_timer <= 0.0:
+			_build_level(level + 1)
+			Audio.play("level_start")
+			hud.show_banner("LEVEL %d" % level, Color(0.0, 0.94, 1.0))
+			hud.set_level(level, _spawn_queue.size())
+		return
+	# drain the fixed queue
+	_spawn_timer -= delta
+	if _spawn_timer <= 0.0 and not _spawn_queue.is_empty():
+		_spawn_timer = clampf(0.95 - level * 0.05, 0.3, 0.95)
+		_spawn_one(_spawn_queue.pop_back())
+	# level clear?
+	if _spawn_queue.is_empty() and _alive_enemies() == 0:
+		_level_cleared()
+
+
+func _alive_enemies() -> int:
+	var n := 0
+	for e in enemies:
+		if e.active:
+			n += 1
+	return n
+
+
+func _level_cleared() -> void:
+	_in_between = true
+	_between_timer = BETWEEN_LEVELS
+	RunState.hp = mini(RunState.hp + 1, RunState.max_hp)   # clear reward: patch up
+	hud.refresh_hp()
+	Audio.play("level_clear", -2.0)
+	hud.show_banner("LEVEL %d CLEAR  ·  +1 HP" % level, Color(1.0, 0.72, 0.0), 1.5)
+	Analytics.design_event("level_clear", {"level": level})
+	# guaranteed pickup near the player, alternating crate / powerup orb
+	_clear_drop_flip = not _clear_drop_flip
+	var kind: Pickup.Kind = Pickup.Kind.CRATE if _clear_drop_flip else _random_orb_kind()
+	var offset := Vector2.from_angle(rng.randf() * TAU) * 60.0
+	_acquire_pickup().spawn(kind, player.global_position + offset)
+
+
+func remaining_count() -> int:
+	return _spawn_queue.size() + _alive_enemies()
+
+
+# ---------------------------------------------------------------- spawning
+
+func _speed_scale() -> float:
+	return minf(1.0 + RunState.run_time / 600.0, 1.35)
+
+
+func _ring_point() -> Vector2:
+	var ang := rng.randf() * TAU
+	return player.global_position + Vector2.from_angle(ang) * rng.randf_range(SPAWN_RING_MIN, SPAWN_RING_MAX)
+
+
+func _spawn_one(kind: ShadowEnemy.Kind) -> void:
+	if enemies.size() >= MAX_ACTIVE_ENEMIES or _ending:
+		return
+	var e: ShadowEnemy = _enemy_pool.pop_back() if not _enemy_pool.is_empty() else ShadowEnemy.new()
+	if e.get_parent() == null:
+		world.add_child(e)
+	e.setup(kind, player, rng)
+	e.speed *= _speed_scale()
+	e.global_position = _ring_point()
+	enemies.append(e)
+
+
+func nearest_enemy(pos: Vector2, max_dist: float) -> ShadowEnemy:
+	var best: ShadowEnemy = null
+	var best_d := max_dist
+	for e in enemies:
+		if not e.active:
+			continue
+		var d: float = pos.distance_to(e.global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
+# ---------------------------------------------------------------- guns & powerups
+
+func _equip_weapon(gun_class: GDScript) -> void:
+	if weapon != null:
+		weapon.queue_free()
+	weapon = gun_class.new()
+	weapon.arena = self
+	player.add_child(weapon)
+	hud.set_gun(gun_class.DISPLAY_NAME)
+
+
+func swap_weapon_random() -> void:
+	var options: Array = _guns.filter(func(g: GDScript) -> bool: return weapon == null or weapon.get_script() != g)
+	var pick: GDScript = options[rng.randi_range(0, options.size() - 1)]
+	_equip_weapon(pick)
+	spawn_ring(player.global_position, 90.0, Color(0.0, 0.94, 1.0, 0.9))
+	hud.show_banner(pick.DISPLAY_NAME.to_upper(), Color(1.0, 0.72, 0.0), 0.9)
+
+
+func apply_overdrive(duration: float) -> void:
+	_overdrive_left = duration
+
+
+func vacuum_all_motes() -> void:
+	for m in motes:
+		m.force_pull = true
+
+
+func _process(delta: float) -> void:
+	RunState.run_time += delta if not _ending else 0.0
+	_overdrive_left = maxf(0.0, _overdrive_left - delta)
+	var od := 1.85 if _overdrive_left > 0.0 else 1.0
+	if weapon != null:
+		weapon.rate_scale = od
+	if _overdrive_left > 0.0:
+		hud.set_powerup("OVERDRIVE %ds" % ceili(_overdrive_left))
+	elif hud.powerup_label.text != "":
+		hud.set_powerup("")
+	_director(delta)
+	_bolts_vs_enemies()
+	_enemies_vs_player()
+	_shake = maxf(0.0, _shake - delta * 22.0)
+	world.position = Vector2(rng.randf_range(-_shake, _shake), rng.randf_range(-_shake, _shake))
+	camera.position = player.global_position
+	grid.track(player.global_position, get_viewport_rect().size * 0.5 + Vector2(80, 80))
+	hud.tick(RunState.run_time)
+	hud.fade_vignette(delta)
 
 
 # ---------------------------------------------------------------- input / joystick (§6)
@@ -114,81 +283,7 @@ func _draw_joystick() -> void:
 	_joy_node.draw_circle(_joy_base + _joy_vec, 14.0, Color(0.75, 1.0, 1.0, 0.85))
 
 
-# ---------------------------------------------------------------- main loop
-
-func _process(delta: float) -> void:
-	RunState.run_time += delta if not _ending else 0.0
-	_director(delta)
-	_bolts_vs_enemies()
-	_enemies_vs_player()
-	_shake = maxf(0.0, _shake - delta * 22.0)
-	world.position = Vector2(rng.randf_range(-_shake, _shake), rng.randf_range(-_shake, _shake))
-	camera.position = player.global_position
-	grid.track(player.global_position, get_viewport_rect().size * 0.5 + Vector2(80, 80))
-	hud.tick(RunState.run_time)
-	hud.fade_vignette(delta)
-
-
-func _director(delta: float) -> void:
-	if _ending:
-		return
-	_spawn_timer -= delta
-	if _spawn_timer <= 0.0:
-		_spawn_timer = lerpf(1.35, 0.33, clampf(RunState.run_time / 300.0, 0.0, 1.0))
-		var batch := 1 + int(RunState.run_time / 75.0)
-		for i in range(batch):
-			_spawn_one(ShadowEnemy.Kind.SHADE)
-	_pack_timer -= delta
-	if _pack_timer <= 0.0:
-		_pack_timer = rng.randf_range(13.0, 21.0)
-		var pack_center: Vector2 = _ring_point()
-		for i in range(rng.randi_range(4, 6)):
-			_spawn_one(ShadowEnemy.Kind.SWARMLET, pack_center + Vector2(rng.randf_range(-46, 46), rng.randf_range(-46, 46)))
-
-
-func _speed_scale() -> float:
-	return minf(1.0 + RunState.run_time / 600.0, 1.35)
-
-
-func _ring_point() -> Vector2:
-	var ang := rng.randf() * TAU
-	return player.global_position + Vector2.from_angle(ang) * rng.randf_range(SPAWN_RING_MIN, SPAWN_RING_MAX)
-
-
-func _spawn_one(kind: ShadowEnemy.Kind, at: Vector2 = Vector2.INF) -> void:
-	if enemies.size() >= MAX_ACTIVE_ENEMIES or _ending:
-		return
-	var e: ShadowEnemy = _enemy_pool.pop_back() if not _enemy_pool.is_empty() else ShadowEnemy.new()
-	if e.get_parent() == null:
-		world.add_child(e)
-	e.setup(kind, player, rng)
-	e.speed *= _speed_scale()
-	e.global_position = at if at != Vector2.INF else _ring_point()
-	enemies.append(e)
-
-
-func nearest_enemy(pos: Vector2, max_dist: float) -> ShadowEnemy:
-	var best: ShadowEnemy = null
-	var best_d := max_dist
-	for e in enemies:
-		var d: float = pos.distance_to(e.global_position)
-		if d < best_d:
-			best_d = d
-			best = e
-	return best
-
-
-func acquire_bolt() -> PulseBolt:
-	for b in bolts:
-		if not b.active:
-			return b
-	var b := PulseBolt.new()
-	world.add_child(b)
-	bolts.append(b)
-	return b
-
-
-# ---------------------------------------------------------------- collisions & juice
+# ---------------------------------------------------------------- collisions
 
 func _bolts_vs_enemies() -> void:
 	for b in bolts:
@@ -199,8 +294,9 @@ func _bolts_vs_enemies() -> void:
 				continue
 			if b.global_position.distance_squared_to(e.global_position) < pow(e.radius + 6.0, 2.0):
 				b.deactivate()
+				Audio.play("hit", -7.0)
 				if e.take_hit(b.damage):
-					_kill_enemy(e)
+					kill_enemy(e)
 				break
 
 
@@ -216,16 +312,44 @@ func _enemies_vs_player() -> void:
 				e.global_position += (e.global_position - player.global_position).normalized() * 14.0
 
 
-func _kill_enemy(e: ShadowEnemy) -> void:
+# ---------------------------------------------------------------- kills, FX, drops
+
+func kill_enemy(e: ShadowEnemy) -> void:
 	RunState.kills += 1
 	var eye: Color = ShadowEnemy.STATS[e.kind]["eye"]
 	_burst(e.global_position, eye)
-	var mote_count: int = ShadowEnemy.STATS[e.kind]["gems"]
-	for i in range(mote_count):
+	spawn_ring(e.global_position, 44.0, Color(eye.r, eye.g, eye.b, 0.85))
+	Audio.play("die", -4.0)
+	for i in range(int(ShadowEnemy.STATS[e.kind]["gems"])):
 		_acquire_mote().drop(e.global_position)
+	_roll_drops(e.global_position)
 	enemies.erase(e)
 	e.release()
 	_enemy_pool.append(e)
+	if not _in_between and not _ending:
+		hud.set_level(level, remaining_count())
+
+
+func _roll_drops(at: Vector2) -> void:
+	var r := rng.randf()
+	if r < 0.03:
+		_acquire_pickup().spawn(Pickup.Kind.CRATE, at)
+	elif r < 0.08:
+		_acquire_pickup().spawn(_random_orb_kind(), at)
+
+
+func _random_orb_kind() -> Pickup.Kind:
+	return [Pickup.Kind.OVERDRIVE, Pickup.Kind.SHIELD, Pickup.Kind.MAGNET][rng.randi_range(0, 2)] as Pickup.Kind
+
+
+func acquire_bolt() -> PulseBolt:
+	for b in bolts:
+		if not b.active:
+			return b
+	var b := PulseBolt.new()
+	world.add_child(b)
+	bolts.append(b)
+	return b
 
 
 func _acquire_mote() -> LightMote:
@@ -239,29 +363,60 @@ func _acquire_mote() -> LightMote:
 	return m
 
 
+func _acquire_pickup() -> Pickup:
+	for p in pickups:
+		if not p.active:
+			return p
+	var p := Pickup.new()
+	p.arena = self
+	p.z_index = 10
+	world.add_child(p)
+	pickups.append(p)
+	return p
+
+
+func spawn_ring(at: Vector2, max_radius: float, col: Color) -> void:
+	for r in rings:
+		if not r.active:
+			r.fire(world.to_local(at), max_radius, col)
+			return
+	var r := FxRing.new()
+	world.add_child(r)
+	rings.append(r)
+	r.fire(world.to_local(at), max_radius, col)
+
+
 func _burst(at: Vector2, col: Color) -> void:
 	var p := CPUParticles2D.new()
 	p.position = world.to_local(at)
 	p.one_shot = true
 	p.emitting = true
-	p.amount = 14
-	p.lifetime = 0.5
+	p.amount = 22
+	p.lifetime = 0.55
 	p.explosiveness = 1.0
 	p.spread = 180.0
 	p.gravity = Vector2.ZERO
-	p.initial_velocity_min = 60.0
-	p.initial_velocity_max = 210.0
-	p.scale_amount_min = 1.5
-	p.scale_amount_max = 3.5
-	p.color = col
+	p.initial_velocity_min = 90.0
+	p.initial_velocity_max = 270.0
+	p.damping_min = 160.0
+	p.damping_max = 260.0
+	p.scale_amount_min = 2.0
+	p.scale_amount_max = 4.5
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color.WHITE)
+	ramp.set_color(1, col)
+	p.color_ramp = ramp
 	world.add_child(p)
-	get_tree().create_timer(0.9).timeout.connect(p.queue_free)
+	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
 
+
+# ---------------------------------------------------------------- damage & death
 
 func _on_player_took_damage(current_hp: int) -> void:
 	hud.flash_damage()
 	hud.refresh_hp()
 	_shake = 7.0
+	Audio.play("hurt", -3.0, 0.02)
 	if current_hp <= 0:
 		_begin_death()
 
@@ -269,11 +424,12 @@ func _on_player_took_damage(current_hp: int) -> void:
 func _begin_death() -> void:
 	_ending = true
 	Engine.time_scale = 0.25
-	Analytics.design_event("run_end", {"time": snappedf(RunState.run_time, 0.1), "kills": RunState.kills})
+	Audio.play("game_over")
+	Analytics.design_event("run_end", {"time": snappedf(RunState.run_time, 0.1), "kills": RunState.kills, "level": level})
 	await get_tree().create_timer(0.9, true, false, true).timeout
 	Engine.time_scale = 1.0
 	GameState.change_state(GameState.State.RESULTS)
 	SaveSystem.mark_run_finished()
-	hud.build_results(RunState.run_time, seed_hex())
+	hud.build_results(RunState.run_time, seed_hex(), level)
 	await get_tree().create_timer(0.6, true, false, true).timeout
 	_results_ready = true

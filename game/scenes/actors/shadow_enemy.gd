@@ -24,6 +24,7 @@ var speed := 90.0
 var radius := 14.0
 var damage := 1
 var active := false
+var melee_ready_ms := 0  # Orbit Blades per-enemy hit cooldown
 var _player: Node2D
 var _flash := 0.0
 var _dir := Vector2.RIGHT
