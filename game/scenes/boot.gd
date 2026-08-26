@@ -42,6 +42,12 @@ func _ready() -> void:
 	shop_btn.add_theme_font_size_override("font_size", 22)
 	shop_btn.pressed.connect(_open_shop)
 	$UI/CenterBox/VBox.add_child(shop_btn)
+	var help_btn := Button.new()
+	help_btn.text = "HOW TO PLAY"
+	help_btn.custom_minimum_size = Vector2(200, 50)
+	help_btn.add_theme_font_size_override("font_size", 22)
+	help_btn.pressed.connect(_open_tutorial)
+	$UI/CenterBox/VBox.add_child(help_btn)
 
 
 func _pulse(item: CanvasItem, period: float) -> void:
@@ -62,6 +68,87 @@ func _start_run() -> void:
 	RunState.reset_run()
 	GameState.change_state(GameState.State.RUN)
 	get_tree().change_scene_to_file("res://scenes/arena.tscn")
+
+
+func _open_tutorial() -> void:
+	if _shop_root != null:
+		return
+	_shop_root = CanvasLayer.new()
+	_shop_root.layer = 20
+	add_child(_shop_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.01, 0.03, 0.92)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(dim)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 30
+	scroll.offset_right = -30
+	scroll.offset_top = 40
+	scroll.offset_bottom = -40
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 16)
+	scroll.add_child(content)
+	_add_tut_title(content, "HOW TO PLAY")
+	_add_tut_section(content, "MOVEMENT", "Touch and drag anywhere on the LEFT HALF of the screen. A neon joystick appears. Your spark follows where you point.")
+	_add_tut_section(content, "SHOOTING", "Your weapon fires AUTOMATICALLY at the nearest enemy. Just focus on positioning.")
+	_add_tut_section(content, "DASH", "Tap the DIAMOND button (bottom-right) to dash. Brief invincibility + speed. Cooldown shown by the ring.")
+	_add_tut_section(content, "LEVELS", "Each level has a fixed enemy count. Kill all to clear. You heal +1 HP on every clear.")
+	_add_tut_section(content, "WEAPONS", "Pick up CYAN CRATES for new weapons. Pulse Bolt (auto-target), Orbit Blades (spin + shoot), Nova Burst (shockwave + shoot). All fire automatically.")
+	_add_tut_section(content, "POWERUPS", "MAGENTA = Overdrive (faster fire). WHITE = Shield (+1 HP). AMBER = Magnet (vacuum XP). All enhance shooting.")
+	_add_tut_section(content, "GEMS", "Collect gems from kills and level clears. Spend in SHOP for permanent upgrades.")
+	_add_tut_section(content, "RADAR", "Circular radar (top-left) shows enemy positions as colored dots.")
+	_add_tut_section(content, "CARDS", "Gain XP to level up, then choose 1 of 3 random upgrade cards.")
+	var close := Button.new()
+	close.text = "GOT IT"
+	close.custom_minimum_size = Vector2(0, 55)
+	close.add_theme_font_size_override("font_size", 22)
+	close.pressed.connect(_close_overlay)
+	content.add_child(close)
+
+
+func _add_tut_title(parent: Control, text: String) -> void:
+	var t := Label.new()
+	t.text = text
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 30)
+	t.add_theme_color_override("font_color", Color(0.0, 0.94, 1.0))
+	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	t.add_theme_constant_override("shadow_offset_y", 2)
+	parent.add_child(t)
+
+
+func _add_tut_section(parent: Control, title: String, desc: String) -> void:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.07, 0.14, 0.9)
+	sb.border_color = Color(0.0, 0.94, 1.0, 0.3)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", sb)
+	parent.add_child(panel)
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+	var t := Label.new()
+	t.text = title
+	t.add_theme_font_size_override("font_size", 18)
+	t.add_theme_color_override("font_color", Color(0.0, 0.94, 1.0))
+	vbox.add_child(t)
+	var d := Label.new()
+	d.text = desc
+	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d.add_theme_font_size_override("font_size", 15)
+	d.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	vbox.add_child(d)
 
 
 func _open_shop() -> void:
@@ -134,7 +221,7 @@ func _open_shop() -> void:
 	close.text = "BACK"
 	close.custom_minimum_size = Vector2(0, 55)
 	close.add_theme_font_size_override("font_size", 22)
-	close.pressed.connect(_close_shop)
+	close.pressed.connect(_close_overlay)
 	content.add_child(close)
 
 
@@ -199,11 +286,11 @@ func _make_card(id: String, title: String, desc: String, cur_lv: int, max_lv: in
 func _buy(id: String) -> void:
 	if SaveSystem.buy_upgrade(id):
 		Audio.play("powerup", -2.0)
-		_close_shop()
+		_close_overlay()
 		_open_shop()
 
 
-func _close_shop() -> void:
+func _close_overlay() -> void:
 	if _shop_root != null:
 		_shop_root.queue_free()
 		_shop_root = null
