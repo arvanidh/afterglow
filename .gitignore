@@ -1,0 +1,40 @@
+# ============================================================
+# AFTERGLOW — .gitignore
+# Law of this file: if it could cost money, access, or the app's
+# identity if leaked, it does not enter version control. Ever.
+# ============================================================
+
+# ---- signing & secrets (ABSOLUTE BAN) ----
+*.keystore
+*.jks
+*.pem
+*.p12
+KEYSTORE-PASSWORD*
+*password*.txt
+google-services.json
+GoogleService-Info.plist
+settings.txt
+secrets/
+
+# ---- Android / Gradle build outputs ----
+game/.godot/
+game/android/build/
+*.apk
+*.aab
+*.idsig
+local.properties
+
+# ---- Godot ----
+.godot/
+export_presets.cfg
+export_credentials.cfg
+
+# ---- local tooling (never part of the repo) ----
+.freebuff/
+downloads/
+tools/
+
+# ---- OS junk ----
+Thumbs.db
+desktop.ini
+.DS_Store
