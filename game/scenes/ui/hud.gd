@@ -179,6 +179,46 @@ func combo_pop(streak: int) -> void:
 func clear_combo() -> void:
 	combo_label.text = ""
 
+var _announcer_label: Label
+
+func _build_announcer() -> void:
+	_announcer_label = Label.new()
+	_announcer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_announcer_label.z_index = 30
+	_announcer_label.visible = false
+	_announcer_label.add_theme_font_size_override("font_size", 38)
+	_announcer_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_announcer_label.add_theme_constant_override("shadow_offset_x", 2)
+	_announcer_label.add_theme_constant_override("shadow_offset_y", 2)
+	var _vsz := get_viewport().get_visible_rect().size
+	_announcer_label.position = Vector2(_vsz.x * 0.5 - 200, _vsz.y * 0.32)
+	_announcer_label.size = Vector2(400, 50)
+	_announcer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_announcer_label)
+
+func show_announcer(text: String, col: Color) -> void:
+	if _announcer_label == null:
+		_build_announcer()
+	_announcer_label.text = text
+	_announcer_label.add_theme_color_override("font_color", col)
+	_announcer_label.visible = true
+	_announcer_label.modulate.a = 1.0
+	_announcer_label.scale = Vector2(1.8, 1.8)
+	_announcer_label.pivot_offset = Vector2(200, 25)
+	kill_announcer_tween()
+	var tw := create_tween()
+	tw.tween_property(_announcer_label, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(_announcer_label, "position:y", _announcer_label.position.y - 20.0, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.5)
+	tw.tween_property(_announcer_label, "modulate:a", 0.0, 0.3)
+	tw.tween_callback(func(): _announcer_label.visible = false)
+
+func kill_announcer_tween() -> void:
+	if _announcer_label and _announcer_label.visible:
+		var existing := get_tree().get_processed_tweens()
+		for t in existing:
+			if t.is_valid():
+				t.kill()
 
 # ---------------------------------------------------------------- standard API
 
@@ -228,11 +268,19 @@ func refresh_hp(effective_max: int) -> void:
 
 
 func flash_damage() -> void:
-	vignette.color.a = 0.38
+	vignette.color = Color(0.9, 0.15, 0.1, 0.35)
+
+
+func flash_kill() -> void:
+	vignette.color = Color(1.0, 1.0, 1.0, 0.18)
+
+
+func flash_level_up() -> void:
+	vignette.color = Color(0.0, 0.94, 1.0, 0.25)
 
 
 func fade_vignette(delta: float) -> void:
-	vignette.color.a = maxf(0.0, vignette.color.a - delta * 1.4)
+	vignette.color.a = maxf(0.0, vignette.color.a - delta * 2.5)
 
 
 # ---------------------------------------------------------------- damage numbers

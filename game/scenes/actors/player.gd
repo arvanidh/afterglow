@@ -33,15 +33,17 @@ var _trail: CPUParticles2D
 func _ready() -> void:
 	z_index = 20
 	_trail = CPUParticles2D.new()
-	_trail.amount = 26
-	_trail.lifetime = 0.5
+	_trail.amount = 32
+	_trail.lifetime = 0.45
 	_trail.local_coords = false
 	_trail.gravity = Vector2.ZERO
-	_trail.initial_velocity_min = 4.0
-	_trail.initial_velocity_max = 14.0
-	_trail.scale_amount_min = 1.5
-	_trail.scale_amount_max = 4.0
-	_trail.color = Color(0.0, 0.94, 1.0, 0.55)
+	_trail.initial_velocity_min = 6.0
+	_trail.initial_velocity_max = 22.0
+	_trail.scale_amount_min = 1.8
+	_trail.scale_amount_max = 5.0
+	_trail.damping_min = 80.0
+	_trail.damping_max = 160.0
+	_trail.color = Color(0.0, 0.94, 1.0, 0.6)
 	add_child(_trail)
 
 

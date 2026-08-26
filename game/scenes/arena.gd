@@ -184,6 +184,9 @@ func _level_cleared() -> void:
 	RunState.hp = mini(RunState.hp + 1, player.effective_max_hp())
 	hud.refresh_hp(player.effective_max_hp())
 	Audio.play("level_clear", -2.0)
+	shake(4.0)
+	hud.flash_level_up()
+	hud.show_announcer("LEVEL CLEAR", Color(1.0, 0.72, 0.0))
 	hud.show_banner("LEVEL %d CLEAR  ·  +1 HP" % level, Color(1.0, 0.72, 0.0), 1.5)
 	# Bonus gem drop on level clear
 	Analytics.design_event("level_clear", {"level": level})
@@ -318,14 +321,19 @@ func _open_draft() -> void:
 	if _ending:
 		return
 	Audio.play("levelup")
+	hud.flash_level_up()
 	spawn_ring(player.global_position, 120.0, Color(1.0, 0.72, 0.0, 0.9))
 	hud.refresh_hp(player.effective_max_hp())
 	var choices := CardDb.draw_three(owned_guns, gun_lv, passives, rng)
-	if OS.get_environment("AG_AUTOPICK") == "1":
-		_apply_card(choices[0])
-		return
-	get_tree().paused = true
-	hud.show_draft(choices, _apply_card)
+	# Auto-pick best card: prefer weapon upgrades > new weapons > passives
+	var best: Dictionary = choices[0]
+	for card: Dictionary in choices:
+		if card["kind"] == "weapon_up" and current_gun_id() == card["target"]:
+			best = card
+			break
+		elif card["kind"] == "weapon_new" and not owned_guns.has(card["target"]):
+			best = card
+	_apply_card(best)
 
 
 func _apply_card(card: Dictionary) -> void:
@@ -504,15 +512,28 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	_streak_t = COMBO_WINDOW
 	if streak >= 3:
 		hud.combo_pop(streak)
-		# Funny combo sounds
+		# Funny combo sounds + announcer
 		if streak == 3:
 			Audio.play("combo3", -5.0)
+			hud.show_announcer("TRIPLE KILL", Color(1.0, 0.94, 0.0))
 		elif streak == 5:
 			Audio.play("combo5", -4.0)
+			hud.show_announcer("MEGA KILL", Color(1.0, 0.45, 0.2))
 		elif streak == 10:
 			Audio.play("combo10", -3.0)
+			hud.show_announcer("ULTRA KILL", Color(1.0, 0.2, 0.2))
+			shake(5.0)
+		elif streak == 20:
+			Audio.play("combo10", -2.0)
+			hud.show_announcer("HYPER KILL", Color(1.0, 0.0, 0.6))
+			shake(8.0)
+		elif streak == 30:
+			Audio.play("combo10", -1.0)
+			hud.show_announcer("UNSTOPPABLE", Color(0.0, 1.0, 1.0))
+			shake(10.0)
 		elif streak % 10 == 0:
 			Audio.play("combo10", -2.0)
+			hud.show_announcer("GODLIKE", Color(1.0, 0.84, 0.0))
 	if streak > 0 and streak % 5 == 0:
 		for i in range(mini(1 + streak / 10, 3)):
 			_acquire_mote().drop(e.global_position, 1)
@@ -523,6 +544,11 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	var eye: Color = ShadowEnemy.STATS[e.kind]["eye"]
 	_burst(e.global_position, eye)
 	spawn_ring(e.global_position, 44.0, Color(eye.r, eye.g, eye.b, 0.85))
+	# Hitstop: brief freeze for impact feel
+	Engine.time_scale = 0.15
+	await get_tree().create_timer(0.06, true, false, true).timeout
+	Engine.time_scale = 1.0
+	hud.flash_kill()
 	# Funny kill sound per enemy type
 	match e.kind:
 		ShadowEnemy.Kind.SWARMLET:
@@ -537,8 +563,12 @@ func kill_enemy(e: ShadowEnemy) -> void:
 			Audio.play("splat2", -4.0)
 	if e.kind == ShadowEnemy.Kind.BRUTE:
 		Audio.play("thud", -2.0)
-		shake(5.0)
+		shake(8.0)
 		hud.spawn_float(e.global_position, "BRUTE DOWN", Color(1.0, 0.45, 0.2))
+		_spawn_death_shockwave(e.global_position, Color(1.0, 0.3, 0.1), 90.0)
+	elif e.elite:
+		shake(6.0)
+		_spawn_death_shockwave(e.global_position, eye, 70.0)
 	var gems := int(ShadowEnemy.STATS[e.kind]["gems"]) * (3 if e.elite else 1)
 	for i in range(gems):
 		_acquire_mote().drop(e.global_position, 1)
@@ -623,8 +653,8 @@ func _burst(at: Vector2, col: Color) -> void:
 	p.position = world.to_local(at)
 	p.one_shot = true
 	p.emitting = true
-	p.amount = 24
-	p.lifetime = 0.55
+	p.amount = 32
+	p.lifetime = 0.65
 	p.explosiveness = 1.0
 	p.spread = 180.0
 	p.gravity = Vector2.ZERO
@@ -642,9 +672,36 @@ func _burst(at: Vector2, col: Color) -> void:
 	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
 
 
+func _spawn_death_shockwave(at: Vector2, col: Color, radius: float) -> void:
+	# Expanding ring + particles for juicy kills
+	spawn_ring(at, radius, col, 0.35)
+	var p := CPUParticles2D.new()
+	p.position = world.to_local(at)
+	p.one_shot = true
+	p.emitting = true
+	p.amount = 48
+	p.lifetime = 0.5
+	p.explosiveness = 1.0
+	p.spread = 180.0
+	p.gravity = Vector2.ZERO
+	p.initial_velocity_min = 120.0
+	p.initial_velocity_max = 350.0
+	p.damping_min = 200.0
+	p.damping_max = 350.0
+	p.scale_amount_min = 2.5
+	p.scale_amount_max = 6.0
+	var ramp := Gradient.new()
+	ramp.set_color(0, col)
+	ramp.set_color(1, Color(col.r, col.g, col.b, 0.0))
+	p.color_ramp = ramp
+	world.add_child(p)
+	get_tree().create_timer(0.8).timeout.connect(p.queue_free)
+
+
 # ---------------------------------------------------------------- damage & death
 
 func _on_player_took_damage(current_hp: int) -> void:
+	# Damage flash: red pulse
 	hud.flash_damage()
 	hud.refresh_hp(player.effective_max_hp())
 	shake(7.0)
