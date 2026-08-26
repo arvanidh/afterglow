@@ -188,9 +188,9 @@ func _level_cleared() -> void:
 	# Bonus gem drop on level clear
 	Analytics.design_event("level_clear", {"level": level})
 	_clear_drop_flip = not _clear_drop_flip
-	var kind: Pickup.Kind = Pickup.Kind.CRATE if _clear_drop_flip else _random_orb_kind()
-	var offset := Vector2.from_angle(rng.randf() * TAU) * 60.0
-	_acquire_pickup().spawn(kind, player.global_position + offset)
+	# Level clear: drop 2 powerups for variety
+	_acquire_pickup().spawn(Pickup.Kind.CRATE, player.global_position + Vector2.from_angle(rng.randf() * TAU) * 50.0)
+	_acquire_pickup().spawn(_random_orb_kind(), player.global_position + Vector2.from_angle(rng.randf() * TAU) * 70.0)
 	RunState.add_gems(2)
 	hud.spawn_float(player.global_position, "+2 GEMS", Color(1.0, 0.72, 0.0))
 
@@ -364,6 +364,7 @@ func _process(delta: float) -> void:
 	RunState.run_time += delta if not _ending else 0.0
 	_overdrive_left = maxf(0.0, _overdrive_left - delta)
 	var od := 1.85 if _overdrive_left > 0.0 else 1.0
+	# Always reset rate_scale — prevents drift from overdrive expiry
 	if weapon != null:
 		weapon.rate_scale = od
 	if _overdrive_left > 0.0:
@@ -515,6 +516,9 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	if streak > 0 and streak % 5 == 0:
 		for i in range(mini(1 + streak / 10, 3)):
 			_acquire_mote().drop(e.global_position, 1)
+		# Streak milestone: guaranteed powerup drop!
+		_acquire_pickup().spawn(_random_orb_kind(), e.global_position)
+		hud.spawn_float(e.global_position, "STREAK BONUS", Color(1.0, 0.72, 0.0))
 		shake(2.0)
 	var eye: Color = ShadowEnemy.STATS[e.kind]["eye"]
 	_burst(e.global_position, eye)
