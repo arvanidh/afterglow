@@ -6,7 +6,7 @@ extends Node2D
 @onready var best_label: Label = $UI/FPS
 @onready var version_label: Label = $UI/Version
 
-var _shop_root: Control = null
+var _shop_root: CanvasLayer = null
 
 
 func _ready() -> void:
@@ -70,55 +70,55 @@ func _open_shop() -> void:
 	var save := SaveSystem.load_save()
 	var gems: int = int(save.get("gems", 0))
 	var upgrades: Dictionary = save.get("upgrades", {})
-	var vsz := get_viewport_rect().size
 
-	# Full-screen overlay
-	_shop_root = Control.new()
-	_shop_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_shop_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Use CanvasLayer so it renders on top of everything
+	_shop_root = CanvasLayer.new()
+	_shop_root.layer = 20
 	add_child(_shop_root)
 
-	# Dim background - closes shop on tap OUTSIDE the panel
+	# Full-screen dim background
 	var dim := ColorRect.new()
-	dim.color = Color(0.01, 0.01, 0.03, 0.88)
+	dim.color = Color(0.01, 0.01, 0.03, 0.90)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_shop_root.add_child(dim)
 
-	# Scroll container for the full-screen content
+	# Main scroll container
 	var scroll := ScrollContainer.new()
 	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
-	scroll.offset_left = 20
-	scroll.offset_right = -20
-	scroll.offset_top = 30
-	scroll.offset_bottom = -30
+	scroll.offset_left = 30
+	scroll.offset_right = -30
+	scroll.offset_top = 40
+	scroll.offset_bottom = -40
 	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_shop_root.add_child(scroll)
 
-	# Content VBox inside scroll
+	# Content VBox
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 16)
+	content.add_theme_constant_override("separation", 14)
 	scroll.add_child(content)
 
 	# Title
-	var title2 := Label.new()
-	title2.text = "UPGRADE SHOP"
-	title2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title2.add_theme_font_size_override("font_size", 32)
-	title2.add_theme_color_override("font_color", Color(1.0, 0.72, 0.0))
-	content.add_child(title2)
+	var t := Label.new()
+	t.text = "UPGRADE SHOP"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 30)
+	t.add_theme_color_override("font_color", Color(1.0, 0.72, 0.0))
+	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	t.add_theme_constant_override("shadow_offset_y", 2)
+	content.add_child(t)
 
 	# Gem balance
 	var bal := Label.new()
 	bal.name = "Balance"
-	bal.text = "%d gems available" % gems
+	bal.text = "%d gems" % gems
 	bal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bal.add_theme_font_size_override("font_size", 22)
 	bal.add_theme_color_override("font_color", Color(1.0, 0.72, 0.0))
 	content.add_child(bal)
 
-	# Upgrade cards - full width, 1 per row for easy tapping
+	# Upgrade cards
 	for id: String in SaveSystem.UPGRADES:
 		var def: Dictionary = SaveSystem.UPGRADES[id]
 		var cur_lv: int = int(upgrades.get(id, 0))
@@ -127,83 +127,76 @@ func _open_shop() -> void:
 		var at_max := cur_lv >= max_lv
 		var cost: int = costs[cur_lv] if cur_lv < costs.size() else 0
 		var can_buy := gems >= cost and not at_max
-		var card := _make_upgrade_card(id, def["title"], def["desc"], cur_lv, max_lv, cost, can_buy, bal)
-		content.add_child(card)
+		content.add_child(_make_card(id, def["title"], def["desc"], cur_lv, max_lv, cost, can_buy))
 
 	# Close button
-	var close_btn := Button.new()
-	close_btn.text = "BACK"
-	close_btn.custom_minimum_size = Vector2(0, 55)
-	close_btn.add_theme_font_size_override("font_size", 22)
-	close_btn.pressed.connect(_close_shop)
-	content.add_child(close_btn)
-
-	# Close on dim tap (after children are added, so buttons get priority)
-	dim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventScreenTouch and ev.pressed:
-			_close_shop())
+	var close := Button.new()
+	close.text = "BACK"
+	close.custom_minimum_size = Vector2(0, 55)
+	close.add_theme_font_size_override("font_size", 22)
+	close.pressed.connect(_close_shop)
+	content.add_child(close)
 
 
-func _make_upgrade_card(id: String, title: String, desc: String, cur_lv: int, max_lv: int, cost: int, can_buy: bool, bal_label: Label) -> PanelContainer:
+func _make_card(id: String, title: String, desc: String, cur_lv: int, max_lv: int, cost: int, can_buy: bool) -> PanelContainer:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(0, 90)
+	card.custom_minimum_size = Vector2(0, 80)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var csb := StyleBoxFlat.new()
-	csb.bg_color = Color(0.06, 0.07, 0.14, 0.95)
-	csb.border_color = Color(0.0, 0.94, 1.0, 0.5) if can_buy else Color(1, 1, 1, 0.12)
-	csb.set_border_width_all(2)
-	csb.set_corner_radius_all(12)
-	csb.content_margin_left = 18
-	csb.content_margin_right = 18
-	csb.content_margin_top = 14
-	csb.content_margin_bottom = 14
-	card.add_theme_stylebox_override("panel", csb)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.09, 0.18, 0.95)
+	sb.border_color = Color(0.0, 0.94, 1.0, 0.5) if can_buy else Color(1, 1, 1, 0.15)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	card.add_theme_stylebox_override("panel", sb)
 
 	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 16)
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_theme_constant_override("separation", 12)
 	card.add_child(hbox)
 
-	# Left side: title + description
-	var left := VBoxContainer.new()
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.add_theme_constant_override("separation", 2)
-	hbox.add_child(left)
+	# Left: text
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 2)
+	hbox.add_child(vbox)
 
-	var t := Label.new()
-	t.text = "%s  Lv%d/%d" % [title, cur_lv, max_lv]
-	t.add_theme_font_size_override("font_size", 20)
-	t.add_theme_color_override("font_color", Color.WHITE)
-	left.add_child(t)
+	var name_label := Label.new()
+	name_label.text = "%s  Lv%d/%d" % [title, cur_lv, max_lv]
+	name_label.add_theme_font_size_override("font_size", 18)
+	name_label.add_theme_color_override("font_color", Color.WHITE)
+	vbox.add_child(name_label)
 
-	var d := Label.new()
-	d.text = desc
-	d.add_theme_font_size_override("font_size", 15)
-	d.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
-	left.add_child(d)
+	var desc_label := Label.new()
+	desc_label.text = desc
+	desc_label.add_theme_font_size_override("font_size", 14)
+	desc_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+	vbox.add_child(desc_label)
 
-	# Right side: buy button or MAXED
+	# Right: action
 	if cur_lv >= max_lv:
-		var max_label := Label.new()
-		max_label.text = "MAXED"
-		max_label.add_theme_font_size_override("font_size", 18)
-		max_label.add_theme_color_override("font_color", Color(0.35, 1.0, 0.55))
-		max_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		hbox.add_child(max_label)
+		var mx := Label.new()
+		mx.text = "MAXED"
+		mx.add_theme_font_size_override("font_size", 16)
+		mx.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
+		mx.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hbox.add_child(mx)
 	else:
-		var buy_btn := Button.new()
-		buy_btn.text = "BUY\n%d gems" % cost
-		buy_btn.custom_minimum_size = Vector2(100, 50)
-		buy_btn.add_theme_font_size_override("font_size", 16)
-		buy_btn.disabled = not can_buy
-		buy_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		buy_btn.pressed.connect(_buy_upgrade.bind(id, cost, bal_label))
-		hbox.add_child(buy_btn)
+		var btn := Button.new()
+		btn.text = "BUY %d" % cost
+		btn.custom_minimum_size = Vector2(90, 44)
+		btn.add_theme_font_size_override("font_size", 16)
+		btn.disabled = not can_buy
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		btn.pressed.connect(_buy.bind(id))
+		hbox.add_child(btn)
 
 	return card
 
 
-func _buy_upgrade(id: String, cost: int, bal_label: Label) -> void:
+func _buy(id: String) -> void:
 	if SaveSystem.buy_upgrade(id):
 		Audio.play("powerup", -2.0)
 		_close_shop()
