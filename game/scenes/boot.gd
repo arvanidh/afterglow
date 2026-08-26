@@ -11,7 +11,7 @@ var _shop_root: Control = null
 
 func _ready() -> void:
 	GameState.change_state(GameState.State.MENU)
-	version_label.text = "v0.0.6"
+	version_label.text = "v0.0.7"
 	var save := SaveSystem.load_save()
 	var runs := int(save.get("runs", 0))
 	if runs > 0:
@@ -70,52 +70,55 @@ func _open_shop() -> void:
 	var save := SaveSystem.load_save()
 	var gems: int = int(save.get("gems", 0))
 	var upgrades: Dictionary = save.get("upgrades", {})
+	var vsz := get_viewport_rect().size
+
+	# Full-screen overlay
 	_shop_root = Control.new()
 	_shop_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_shop_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_shop_root)
+
+	# Dim background - closes shop on tap OUTSIDE the panel
 	var dim := ColorRect.new()
-	dim.color = Color(0.01, 0.01, 0.03, 0.85)
+	dim.color = Color(0.01, 0.01, 0.03, 0.88)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventScreenTouch and ev.pressed:
-			_close_shop())
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_shop_root.add_child(dim)
-	var panel := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.05, 0.10, 0.98)
-	sb.border_color = Color(1.0, 0.72, 0.0, 0.6)
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(16)
-	sb.content_margin_left = 24
-	sb.content_margin_right = 24
-	sb.content_margin_top = 20
-	sb.content_margin_bottom = 20
-	panel.add_theme_stylebox_override("panel", sb)
-	panel.custom_minimum_size = Vector2(620, 0)
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_shop_root.add_child(panel)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	panel.add_child(vbox)
+
+	# Scroll container for the full-screen content
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 20
+	scroll.offset_right = -20
+	scroll.offset_top = 30
+	scroll.offset_bottom = -30
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(scroll)
+
+	# Content VBox inside scroll
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 16)
+	scroll.add_child(content)
+
+	# Title
 	var title2 := Label.new()
 	title2.text = "UPGRADE SHOP"
 	title2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title2.add_theme_font_size_override("font_size", 28)
+	title2.add_theme_font_size_override("font_size", 32)
 	title2.add_theme_color_override("font_color", Color(1.0, 0.72, 0.0))
-	vbox.add_child(title2)
+	content.add_child(title2)
+
+	# Gem balance
 	var bal := Label.new()
 	bal.name = "Balance"
 	bal.text = "%d gems available" % gems
 	bal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bal.add_theme_font_size_override("font_size", 18)
+	bal.add_theme_font_size_override("font_size", 22)
 	bal.add_theme_color_override("font_color", Color(1.0, 0.72, 0.0))
-	vbox.add_child(bal)
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	vbox.add_child(grid)
+	content.add_child(bal)
+
+	# Upgrade cards - full width, 1 per row for easy tapping
 	for id: String in SaveSystem.UPGRADES:
 		var def: Dictionary = SaveSystem.UPGRADES[id]
 		var cur_lv: int = int(upgrades.get(id, 0))
@@ -125,55 +128,78 @@ func _open_shop() -> void:
 		var cost: int = costs[cur_lv] if cur_lv < costs.size() else 0
 		var can_buy := gems >= cost and not at_max
 		var card := _make_upgrade_card(id, def["title"], def["desc"], cur_lv, max_lv, cost, can_buy, bal)
-		grid.add_child(card)
+		content.add_child(card)
+
+	# Close button
 	var close_btn := Button.new()
 	close_btn.text = "BACK"
-	close_btn.custom_minimum_size = Vector2(200, 45)
-	close_btn.add_theme_font_size_override("font_size", 20)
+	close_btn.custom_minimum_size = Vector2(0, 55)
+	close_btn.add_theme_font_size_override("font_size", 22)
 	close_btn.pressed.connect(_close_shop)
-	vbox.add_child(close_btn)
+	content.add_child(close_btn)
+
+	# Close on dim tap (after children are added, so buttons get priority)
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventScreenTouch and ev.pressed:
+			_close_shop())
 
 
 func _make_upgrade_card(id: String, title: String, desc: String, cur_lv: int, max_lv: int, cost: int, can_buy: bool, bal_label: Label) -> PanelContainer:
 	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 90)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var csb := StyleBoxFlat.new()
 	csb.bg_color = Color(0.06, 0.07, 0.14, 0.95)
-	csb.border_color = Color(0.0, 0.94, 1.0, 0.4) if can_buy else Color(1, 1, 1, 0.15)
-	csb.set_border_width_all(1)
-	csb.set_corner_radius_all(10)
-	csb.content_margin_left = 14
-	csb.content_margin_right = 14
-	csb.content_margin_top = 10
-	csb.content_margin_bottom = 10
+	csb.border_color = Color(0.0, 0.94, 1.0, 0.5) if can_buy else Color(1, 1, 1, 0.12)
+	csb.set_border_width_all(2)
+	csb.set_corner_radius_all(12)
+	csb.content_margin_left = 18
+	csb.content_margin_right = 18
+	csb.content_margin_top = 14
+	csb.content_margin_bottom = 14
 	card.add_theme_stylebox_override("panel", csb)
-	card.custom_minimum_size = Vector2(280, 0)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	card.add_child(vbox)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 16)
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	card.add_child(hbox)
+
+	# Left side: title + description
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 2)
+	hbox.add_child(left)
+
 	var t := Label.new()
 	t.text = "%s  Lv%d/%d" % [title, cur_lv, max_lv]
-	t.add_theme_font_size_override("font_size", 17)
+	t.add_theme_font_size_override("font_size", 20)
 	t.add_theme_color_override("font_color", Color.WHITE)
-	vbox.add_child(t)
+	left.add_child(t)
+
 	var d := Label.new()
 	d.text = desc
-	d.add_theme_font_size_override("font_size", 13)
+	d.add_theme_font_size_override("font_size", 15)
 	d.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
-	vbox.add_child(d)
+	left.add_child(d)
+
+	# Right side: buy button or MAXED
 	if cur_lv >= max_lv:
 		var max_label := Label.new()
 		max_label.text = "MAXED"
-		max_label.add_theme_font_size_override("font_size", 15)
+		max_label.add_theme_font_size_override("font_size", 18)
 		max_label.add_theme_color_override("font_color", Color(0.35, 1.0, 0.55))
-		max_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(max_label)
+		max_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hbox.add_child(max_label)
 	else:
 		var buy_btn := Button.new()
-		buy_btn.text = "BUY  %d gems" % cost
-		buy_btn.add_theme_font_size_override("font_size", 15)
+		buy_btn.text = "BUY\n%d gems" % cost
+		buy_btn.custom_minimum_size = Vector2(100, 50)
+		buy_btn.add_theme_font_size_override("font_size", 16)
 		buy_btn.disabled = not can_buy
+		buy_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		buy_btn.pressed.connect(_buy_upgrade.bind(id, cost, bal_label))
-		vbox.add_child(buy_btn)
+		hbox.add_child(buy_btn)
+
 	return card
 
 
