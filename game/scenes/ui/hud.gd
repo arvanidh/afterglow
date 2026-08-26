@@ -28,10 +28,15 @@ var _dash_frac := -1.0  # <0 hidden
 var _draft_root: Control
 var _radar: Control
 var _radar_enemies: Array = []
+var _floats: Array[Label] = []
+var _announcer_base_y := 0.0
+var _pause_overlay: Control
+var _pause_btn: Label
 var camera: Camera2D
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 10
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_vignette()
@@ -169,6 +174,110 @@ func tick_dash(frac: float) -> void:
 	_dash_btn.queue_redraw()
 
 
+
+	# ----- pause button + overlay
+func layout_pause_button(vsz: Vector2) -> void:
+	var pause_layer := CanvasLayer.new()
+	_pause_btn = Label.new()
+	_pause_btn.text = "||"
+	_pause_btn.add_theme_font_size_override("font_size", 28)
+	_pause_btn.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+	_pause_btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	_pause_btn.add_theme_constant_override("shadow_offset_y", 2)
+	_pause_btn.position = Vector2(vsz.x - 56, 30)
+	_pause_btn.size = Vector2(44, 44)
+	_pause_btn.z_index = 25
+	_pause_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pause_btn.gui_input.connect(_on_pause_input)
+	pause_layer.add_child(_pause_btn)
+	add_child(pause_layer)
+
+func _on_pause_input(ev: InputEvent) -> void:
+	if ev is InputEventScreenTouch and ev.pressed:
+		toggle_pause()
+	elif ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		toggle_pause()
+
+signal pause_toggled(paused: bool)
+
+func toggle_pause() -> void:
+	var tree := get_tree()
+	if tree.paused:
+		tree.paused = false
+		_hide_pause_overlay()
+		pause_toggled.emit(false)
+	else:
+		tree.paused = true
+		_show_pause_overlay()
+		pause_toggled.emit(true)
+
+func _show_pause_overlay() -> void:
+	if _pause_overlay != null:
+		_pause_overlay.queue_free()
+	_pause_overlay = Control.new()
+	_pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	var layer := CanvasLayer.new()
+	layer.layer = 22
+	layer.add_child(_pause_overlay)
+	add_child(layer)
+	# Dim
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.01, 0.03, 0.78)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pause_overlay.add_child(dim)
+	# PAUSED title
+	var title := Label.new()
+	title.text = "PAUSED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_color_override("font_color", CYAN)
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	title.set_anchors_preset(Control.PRESET_CENTER)
+	title.offset_top = -120
+	title.offset_bottom = -60
+	title.offset_left = -150
+	title.offset_right = 150
+	_pause_overlay.add_child(title)
+	# RESUME
+	var resume := _make_pause_btn("RESUME", CYAN, -30)
+	resume.gui_input.connect(_on_resume_pressed)
+	_pause_overlay.add_child(resume)
+	# QUIT TO MENU
+	var quitb := _make_pause_btn("QUIT TO MENU", Color(1.0, 0.45, 0.2), 60)
+	quitb.gui_input.connect(_on_quit_pressed)
+	_pause_overlay.add_child(quitb)
+
+func _on_resume_pressed(ev: InputEvent) -> void:
+	if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed):
+		toggle_pause()
+
+func _on_quit_pressed(ev: InputEvent) -> void:
+	if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed):
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/boot.tscn")
+
+func _make_pause_btn(text: String, col: Color, y_off: float) -> Label:
+	var btn := Label.new()
+	btn.text = text
+	btn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.add_theme_font_size_override("font_size", 30)
+	btn.add_theme_color_override("font_color", col)
+	btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	btn.set_anchors_preset(Control.PRESET_CENTER)
+	btn.offset_top = y_off
+	btn.offset_bottom = y_off + 50
+	btn.offset_left = -140
+	btn.offset_right = 140
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	return btn
+
+func _hide_pause_overlay() -> void:
+	if _pause_overlay != null:
+		_pause_overlay.queue_free()
+		_pause_overlay = null
+
 func combo_pop(streak: int) -> void:
 	combo_label.text = "×%d COMBO" % streak
 	combo_label.scale = Vector2(1.5, 1.5)
@@ -195,30 +304,36 @@ func _build_announcer() -> void:
 	_announcer_label.size = Vector2(400, 50)
 	_announcer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_announcer_label)
+	_announcer_base_y = _announcer_label.position.y
 
 func show_announcer(text: String, col: Color) -> void:
 	if _announcer_label == null:
 		_build_announcer()
+	_kill_announcer_tweens()
 	_announcer_label.text = text
 	_announcer_label.add_theme_color_override("font_color", col)
 	_announcer_label.visible = true
 	_announcer_label.modulate.a = 1.0
 	_announcer_label.scale = Vector2(1.8, 1.8)
 	_announcer_label.pivot_offset = Vector2(200, 25)
-	kill_announcer_tween()
+	# Reset position to base each time (prevents upward drift)
+	_announcer_label.position.y = _announcer_base_y
 	var tw := create_tween()
+	tw.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
 	tw.tween_property(_announcer_label, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(_announcer_label, "position:y", _announcer_label.position.y - 20.0, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(_announcer_label, "position:y", _announcer_base_y - 20.0, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(0.5)
 	tw.tween_property(_announcer_label, "modulate:a", 0.0, 0.3)
 	tw.tween_callback(func(): _announcer_label.visible = false)
 
-func kill_announcer_tween() -> void:
-	if _announcer_label and _announcer_label.visible:
-		var existing := get_tree().get_processed_tweens()
-		for t in existing:
-			if t.is_valid():
-				t.kill()
+func _kill_announcer_tweens() -> void:
+	if _announcer_label == null:
+		return
+	var tweens := _announcer_label.get_meta("_tweens", []) as Array
+	for t in tweens:
+		if is_instance_valid(t) and t.is_valid():
+			t.kill()
+	_announcer_label.set_meta("_tweens", [])
 
 # ---------------------------------------------------------------- standard API
 
@@ -292,6 +407,11 @@ func spawn_float(world_pos: Vector2, text: String, col: Color) -> void:
 	var screen := world_pos - camera.get_screen_center_position() + vsz * 0.5
 	if screen.x < -40 or screen.y < -40 or screen.x > vsz.x + 40 or screen.y > vsz.y + 40:
 		return
+	# Cap floating labels to prevent buildup
+	while _floats.size() > 30:
+		var old_l: Label = _floats.pop_front()
+		if is_instance_valid(old_l):
+			old_l.queue_free()
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_size_override("font_size", 20)
@@ -301,11 +421,17 @@ func spawn_float(world_pos: Vector2, text: String, col: Color) -> void:
 	l.z_index = 30
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(l)
+	_floats.append(l)
 	var tw := create_tween()
 	tw.set_parallel(true)
+	tw.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
 	tw.tween_property(l, "position:y", l.position.y - 34.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(l, "modulate:a", 0.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.chain().tween_callback(l.queue_free)
+	tw.chain().tween_callback(func():
+		if is_instance_valid(l):
+			_floats.erase(l)
+			l.queue_free()
+	)
 
 
 # ---------------------------------------------------------------- level-up draft

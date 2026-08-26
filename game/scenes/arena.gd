@@ -55,6 +55,8 @@ var _streak_t := 0.0
 var _joy_base := Vector2.ZERO
 var _joy_vec := Vector2.ZERO
 var _joy_index := -1
+var _last_tap_time := 0.0
+const DOUBLE_TAP_CD := 0.35
 var _joy_node: Node2D
 var _shake := 0.0
 var _ending := false
@@ -95,6 +97,7 @@ func _ready() -> void:
 	add_child(hud)
 	hud.set_camera(camera)
 	hud.layout_dash_button(get_viewport_rect().size)
+	hud.layout_pause_button(get_viewport_rect().size)
 	hud.dash_requested.connect(_on_dash_pressed)
 
 	_equip_weapon("pulse", true)
@@ -403,6 +406,14 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------- input / joystick (§6)
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Double-tap pause (right side of screen only, avoids joystick)
+	if event is InputEventScreenTouch and event.pressed:
+		var now := Time.get_ticks_msec() / 1000.0
+		if event.position.x > get_viewport_rect().size.x * 0.5 and now - _last_tap_time < DOUBLE_TAP_CD:
+			hud.toggle_pause()
+			_joy_index = -1
+			return
+		_last_tap_time = now
 	if event is InputEventScreenTouch:
 		if event.pressed and _joy_index == -1 and not _ending and not get_tree().paused:
 			_joy_index = event.index
