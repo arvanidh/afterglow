@@ -211,6 +211,9 @@ func toggle_pause() -> void:
 		_show_pause_overlay()
 		pause_toggled.emit(true)
 
+var _pause_resume_rect := Rect2()
+var _pause_quit_rect := Rect2()
+
 func _show_pause_overlay() -> void:
 	if _pause_overlay != null:
 		_pause_overlay.queue_free()
@@ -220,7 +223,7 @@ func _show_pause_overlay() -> void:
 	layer.layer = 22
 	layer.add_child(_pause_overlay)
 	add_child(layer)
-	# Dim — IGNORE touches so buttons behind it receive input
+	# Dim
 	var dim := ColorRect.new()
 	dim.color = Color(0.01, 0.01, 0.03, 0.78)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -240,26 +243,50 @@ func _show_pause_overlay() -> void:
 	title.offset_right = 150
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_overlay.add_child(title)
-	# RESUME button — transparent bg rect behind label for reliable touch
+	# RESUME
 	var resume := _make_pause_btn("RESUME", CYAN, -30)
-	resume.gui_input.connect(_on_resume_pressed)
 	_pause_overlay.add_child(resume)
-	# QUIT TO MENU button
+	# QUIT TO MENU
 	var quitb := _make_pause_btn("QUIT TO MENU", Color(1.0, 0.45, 0.2), 60)
-	quitb.gui_input.connect(_on_quit_pressed)
 	_pause_overlay.add_child(quitb)
+	# Store button rects for _input hit-testing
+	var vsz := get_viewport().get_visible_rect().size
+	var cx := vsz.x * 0.5
+	var cy := vsz.y * 0.5
+	_pause_resume_rect = Rect2(cx - 150, cy - 30, 300, 55)
+	_pause_quit_rect = Rect2(cx - 150, cy + 60, 300, 55)
 
-func _on_resume_pressed(ev: InputEvent) -> void:
-	if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed):
+
+func _input(event: InputEvent) -> void:
+	# Only handle pause overlay taps when paused
+	if get_tree() == null or not get_tree().paused:
+		return
+	if _pause_overlay == null:
+		return
+	var pos := Vector2.ZERO
+	var pressed := false
+	if event is InputEventScreenTouch:
+		pos = event.position
+		pressed = event.pressed
+	elif event is InputEventMouseButton:
+		pos = event.position
+		pressed = event.pressed
+	if not pressed:
+		return
+	if _pause_resume_rect.has_point(pos):
 		toggle_pause()
-
-func _on_quit_pressed(ev: InputEvent) -> void:
-	if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed):
+	elif _pause_quit_rect.has_point(pos):
 		get_tree().paused = false
 		get_tree().change_scene_to_file("res://scenes/boot.tscn")
 
+func _hide_pause_overlay() -> void:
+	if _pause_overlay != null:
+		_pause_overlay.queue_free()
+		_pause_overlay = null
+	_pause_resume_rect = Rect2()
+	_pause_quit_rect = Rect2()
+
 func _make_pause_btn(text: String, col: Color, y_off: float) -> ColorRect:
-	# Use ColorRect as container — reliably catches touches
 	var container := ColorRect.new()
 	container.color = Color(col.r, col.g, col.b, 0.15)
 	container.set_anchors_preset(Control.PRESET_CENTER)
@@ -267,7 +294,7 @@ func _make_pause_btn(text: String, col: Color, y_off: float) -> ColorRect:
 	container.offset_bottom = y_off + 55
 	container.offset_left = -150
 	container.offset_right = 150
-	container.mouse_filter = Control.MOUSE_FILTER_STOP
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -279,11 +306,6 @@ func _make_pause_btn(text: String, col: Color, y_off: float) -> ColorRect:
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	container.add_child(lbl)
 	return container
-
-func _hide_pause_overlay() -> void:
-	if _pause_overlay != null:
-		_pause_overlay.queue_free()
-		_pause_overlay = null
 
 func combo_pop(streak: int) -> void:
 	combo_label.text = "×%d COMBO" % streak
