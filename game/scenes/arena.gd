@@ -251,6 +251,9 @@ func _equip_weapon(id: String, first := false) -> void:
 	if gun_lv.has(id):
 		weapon.level = gun_lv[id]
 	player.add_child(weapon)
+	# Reset cooldown so shooting resumes instantly
+	# Reset cooldown - use set() which handles missing properties gracefully
+	weapon.set("_cd", 0.0)
 	hud.set_gun(weapon.DISPLAY_NAME, weapon.level)
 
 
@@ -263,9 +266,12 @@ func swap_weapon_random() -> void:
 	if not owned_guns.has(pick):
 		owned_guns.append(pick)
 	gun_lv[pick] = maxi(int(gun_lv.get(pick, 1)), 1)
+	# Always equip the new weapon but shooting resumes instantly (cooldown = 0)
 	_equip_weapon(pick)
+	# Overdrive boost: weapon crate also gives 4s of overdrive
+	apply_overdrive(4.0)
 	spawn_ring(player.global_position, 90.0, Color(0.0, 0.94, 1.0, 0.9))
-	hud.show_banner(String(WEAPON_CLASSES[pick].DISPLAY_NAME).to_upper(), Color(1.0, 0.72, 0.0), 0.9)
+	hud.show_banner(String(WEAPON_CLASSES[pick].DISPLAY_NAME).to_upper() + " + OVERDRIVE", Color(1.0, 0.72, 0.0), 0.9)
 
 
 func current_gun_id() -> String:
