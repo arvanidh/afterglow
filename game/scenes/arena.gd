@@ -42,6 +42,7 @@ var _shard_bank := 0.0
 # director
 var _spawn_queue: Array[int] = []
 var _spawn_timer := 1.0
+var _powerup_timer := 8.0
 var _between_timer := 0.0
 var _in_between := false
 var _clear_drop_flip := false
@@ -169,6 +170,31 @@ func _director(delta: float) -> void:
 	if _spawn_timer <= 0.0 and not _spawn_queue.is_empty():
 		_spawn_timer = clampf(0.55 - level * 0.03, 0.15, 0.55)
 		_spawn_one(_spawn_queue.pop_back())
+	# Periodic random powerup spawn on screen
+	_powerup_timer -= delta
+	if _powerup_timer <= 0.0 and not _ending:
+		_powerup_timer = randf_range(6.0, 12.0)
+		var angle := rng.randf() * TAU
+		var dist := randf_range(200.0, 350.0)
+		var drop_pos := player.global_position + Vector2.from_angle(angle) * dist
+		_acquire_pickup().spawn(_random_orb_kind(), drop_pos)
+		# Small sparkle effect
+		var p := CPUParticles2D.new()
+		p.position = world.to_local(drop_pos)
+		p.one_shot = true
+		p.emitting = true
+		p.amount = 12
+		p.lifetime = 0.4
+		p.explosiveness = 1.0
+		p.spread = 180.0
+		p.gravity = Vector2.ZERO
+		p.initial_velocity_min = 30.0
+		p.initial_velocity_max = 80.0
+		p.scale_amount_min = 1.0
+		p.scale_amount_max = 3.0
+		p.color = Color(1.0, 0.72, 0.0, 0.7)
+		world.add_child(p)
+		get_tree().create_timer(0.6).timeout.connect(p.queue_free)
 	if _spawn_queue.is_empty() and _alive_enemies() == 0 and not get_tree().paused:
 		_level_cleared()
 
@@ -560,18 +586,9 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	await get_tree().create_timer(0.06, true, false, true).timeout
 	Engine.time_scale = 1.0
 	hud.flash_kill()
-	# Funny kill sound per enemy type
-	match e.kind:
-		ShadowEnemy.Kind.SWARMLET:
-			Audio.play("pop", -3.0)
-		ShadowEnemy.Kind.SHADE:
-			Audio.play("splat", -4.0)
-		ShadowEnemy.Kind.SPITTER:
-			Audio.play("squeak", -3.0)
-		ShadowEnemy.Kind.BRUTE:
-			Audio.play("crunch", -2.0)
-		_:
-			Audio.play("splat2", -4.0)
+	# Funny kill sound — random from a big pool so it never gets repetitive
+	var _funny_pool: Array[String] = ["pop", "splat", "squeak", "crunch", "splat2", "boing", "squelch", "honk", "whomp", "doh", "oops"]
+	Audio.play(_funny_pool[rng.randi_range(0, _funny_pool.size() - 1)], -3.0)
 	if e.kind == ShadowEnemy.Kind.BRUTE:
 		Audio.play("thud", -2.0)
 		shake(8.0)

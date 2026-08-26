@@ -216,16 +216,15 @@ func _show_pause_overlay() -> void:
 		_pause_overlay.queue_free()
 	_pause_overlay = Control.new()
 	_pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_pause_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	var layer := CanvasLayer.new()
 	layer.layer = 22
 	layer.add_child(_pause_overlay)
 	add_child(layer)
-	# Dim
+	# Dim — IGNORE touches so buttons behind it receive input
 	var dim := ColorRect.new()
 	dim.color = Color(0.01, 0.01, 0.03, 0.78)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_overlay.add_child(dim)
 	# PAUSED title
 	var title := Label.new()
@@ -239,12 +238,13 @@ func _show_pause_overlay() -> void:
 	title.offset_bottom = -60
 	title.offset_left = -150
 	title.offset_right = 150
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_overlay.add_child(title)
-	# RESUME
+	# RESUME button — transparent bg rect behind label for reliable touch
 	var resume := _make_pause_btn("RESUME", CYAN, -30)
 	resume.gui_input.connect(_on_resume_pressed)
 	_pause_overlay.add_child(resume)
-	# QUIT TO MENU
+	# QUIT TO MENU button
 	var quitb := _make_pause_btn("QUIT TO MENU", Color(1.0, 0.45, 0.2), 60)
 	quitb.gui_input.connect(_on_quit_pressed)
 	_pause_overlay.add_child(quitb)
@@ -258,20 +258,27 @@ func _on_quit_pressed(ev: InputEvent) -> void:
 		get_tree().paused = false
 		get_tree().change_scene_to_file("res://scenes/boot.tscn")
 
-func _make_pause_btn(text: String, col: Color, y_off: float) -> Label:
-	var btn := Label.new()
-	btn.text = text
-	btn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	btn.add_theme_font_size_override("font_size", 30)
-	btn.add_theme_color_override("font_color", col)
-	btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
-	btn.set_anchors_preset(Control.PRESET_CENTER)
-	btn.offset_top = y_off
-	btn.offset_bottom = y_off + 50
-	btn.offset_left = -140
-	btn.offset_right = 140
-	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	return btn
+func _make_pause_btn(text: String, col: Color, y_off: float) -> ColorRect:
+	# Use ColorRect as container — reliably catches touches
+	var container := ColorRect.new()
+	container.color = Color(col.r, col.g, col.b, 0.15)
+	container.set_anchors_preset(Control.PRESET_CENTER)
+	container.offset_top = y_off
+	container.offset_bottom = y_off + 55
+	container.offset_left = -150
+	container.offset_right = 150
+	container.mouse_filter = Control.MOUSE_FILTER_STOP
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 30)
+	lbl.add_theme_color_override("font_color", col)
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(lbl)
+	return container
 
 func _hide_pause_overlay() -> void:
 	if _pause_overlay != null:

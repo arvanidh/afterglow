@@ -187,3 +187,25 @@ func _build_all() -> void:
 		var f: float = [1319.0, 1568.0, 2093.0][int(step)]
 		return sin(t * f * TAU) * 0.8 * _env(fposmod(u * 3.0, 1.0) * 0.999 + 0.001, 0.01, 3.0))
 
+	# Extra funny kill sounds
+	_streams["boing"] = _bake(0.18, func(t: float, u: float) -> float:
+		var f: float = lerpf(600.0, 180.0, u)
+		return sin(t * f * TAU) * 0.7 * _env(u, 0.003, 4.0))
+
+	_streams["squelch"] = _bake(0.15, func(t: float, u: float) -> float:
+		return (_noise() * 0.6 + sin(t * lerpf(350.0, 100.0, u) * TAU) * 0.4) * _env(u, 0.003, 5.0))
+
+	_streams["honk"] = _bake(0.22, func(t: float, u: float) -> float:
+		return (_square(t * 330.0 * TAU) * 0.5 + _saw(t * 440.0 * TAU) * 0.3) * _env(u, 0.01, 2.5))
+
+	_streams["whomp"] = _bake(0.30, func(t: float, u: float) -> float:
+		var f: float = lerpf(120.0, 40.0, u)
+		return sin(t * f * TAU) * 0.8 * _env(u, 0.005, 2.0))
+
+	_streams["doh"] = _bake(0.25, func(t: float, u: float) -> float:
+		var f: float = lerpf(800.0, 250.0, pow(u, 0.7))
+		return sin(t * f * TAU) * 0.7 * _env(u, 0.004, 3.0))
+
+	_streams["oops"] = _bake(0.14, func(t: float, u: float) -> float:
+		return sin(t * lerpf(1200.0, 400.0, u) * TAU) * 0.6 * _env(u, 0.002, 6.0))
+
