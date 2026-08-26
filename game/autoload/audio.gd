@@ -5,7 +5,7 @@ extends Node
 ## A diagnostic line prints at boot so `adb logcat` always shows ground truth.
 
 const RATE := 22050
-const POOL_SIZE := 12
+const POOL_SIZE := 20
 
 var _streams := {}
 var _players: Array[AudioStreamPlayer] = []

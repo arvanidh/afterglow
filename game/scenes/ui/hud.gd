@@ -26,6 +26,8 @@ var _xp_bg: ColorRect
 var _dash_btn: Control
 var _dash_frac := -1.0  # <0 hidden
 var _draft_root: Control
+var _radar: Control
+var _radar_enemies: Array = []
 var camera: Camera2D
 
 
@@ -70,6 +72,7 @@ func _ready() -> void:
 
 	_build_xp_bar()
 	_build_dash_button()
+	_build_radar()
 
 	_banner = Label.new()
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -353,6 +356,49 @@ func _make_card(card: Dictionary, on_pick: Callable) -> Button:
 		on_pick.call(card))
 	return b
 
+
+
+
+# ---------------------------------------------------------------- radar minimap
+
+func _build_radar() -> void:
+	_radar = Control.new()
+	_radar.custom_minimum_size = Vector2(110, 110)
+	_radar.size = Vector2(110, 110)
+	_radar.position = Vector2(16, 50)
+	_radar.z_index = 15
+	_radar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_radar.draw.connect(_draw_radar)
+	add_child(_radar)
+
+
+func update_radar(enemies: Array, player_pos: Vector2) -> void:
+	_radar_enemies = enemies
+	_radar.queue_redraw()
+
+
+func _draw_radar() -> void:
+	var center := Vector2(55, 55)
+	var radius := 50.0
+	# Background circle
+	_radar.draw_circle(center, radius, Color(0.0, 0.0, 0.0, 0.6))
+	_radar.draw_arc(center, radius, 0.0, TAU, 32, Color(0.0, 0.94, 1.0, 0.3), 1.5)
+	# Grid lines
+	_radar.draw_line(Vector2(center.x - radius, center.y), Vector2(center.x + radius, center.y), Color(0.0, 0.94, 1.0, 0.1), 1.0)
+	_radar.draw_line(Vector2(center.x, center.y - radius), Vector2(center.x, center.y + radius), Color(0.0, 0.94, 1.0, 0.1), 1.0)
+	# Player dot (center, bright cyan)
+	_radar.draw_circle(center, 4.0, Color(0.0, 0.94, 1.0, 0.9))
+	# Enemy dots
+	var scale := radius / 400.0  # 400px game range = full radar
+	for e in _radar_enemies:
+		if not e.active:
+			continue
+		var diff: Vector2 = e.global_position - (camera.get_screen_center_position() if camera else Vector2.ZERO)
+		var pos := center + diff * scale
+		if pos.distance_to(center) > radius - 3.0:
+			continue  # Off radar
+		var col: Color = ShadowEnemy.STATS[e.kind]["eye"] if ShadowEnemy.STATS.has(e.kind) else Color.RED
+		_radar.draw_circle(pos, 2.5, Color(col.r, col.g, col.b, 0.8))
 
 # ---------------------------------------------------------------- results
 

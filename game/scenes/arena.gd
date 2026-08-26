@@ -5,8 +5,8 @@ extends Node2D
 ## Env AG_AUTOPICK=1 auto-resolves drafts for headless smoke tests.
 
 const MAX_ACTIVE_ENEMIES := 90
-const SPAWN_RING_MIN := 800.0
-const SPAWN_RING_MAX := 920.0
+const SPAWN_RING_MIN := 320.0
+const SPAWN_RING_MAX := 420.0
 const JOY_RADIUS := 70.0
 const BETWEEN_LEVELS := 2.4
 const COMBO_WINDOW := 3.2
@@ -148,7 +148,7 @@ func _build_level(n: int) -> void:
 		_spawn_queue[j] = tmp
 	level = n
 	_in_between = false
-	_spawn_timer = 0.9
+	_spawn_timer = 0.3
 	hud.set_level(n, _spawn_queue.size())
 
 
@@ -164,7 +164,7 @@ func _director(delta: float) -> void:
 		return
 	_spawn_timer -= delta
 	if _spawn_timer <= 0.0 and not _spawn_queue.is_empty():
-		_spawn_timer = clampf(0.95 - level * 0.05, 0.3, 0.95)
+		_spawn_timer = clampf(0.55 - level * 0.03, 0.15, 0.55)
 		_spawn_one(_spawn_queue.pop_back())
 	if _spawn_queue.is_empty() and _alive_enemies() == 0 and not get_tree().paused:
 		_level_cleared()
@@ -357,6 +357,8 @@ func _apply_card(card: Dictionary) -> void:
 # ---------------------------------------------------------------- main loop
 
 func _process(delta: float) -> void:
+	if hud == null:
+		return
 	if get_tree().paused:
 		return
 	RunState.run_time += delta if not _ending else 0.0
@@ -381,6 +383,7 @@ func _process(delta: float) -> void:
 	camera.position = player.global_position
 	grid.track(player.global_position, get_viewport_rect().size * 0.5 + Vector2(80, 80))
 	hud.tick(RunState.run_time)
+	hud.update_radar(enemies, player.global_position)
 	hud.set_xp(float(xp) / float(xp_need()), plevel)
 	hud.set_gems(RunState.gems_earned)
 	hud.fade_vignette(delta)
