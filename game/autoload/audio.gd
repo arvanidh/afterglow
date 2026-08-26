@@ -142,3 +142,48 @@ func _build_all() -> void:
 	_streams["elite"] = _bake(0.42, func(t: float, u: float) -> float:
 		var f := 110.0
 		return (sin(t * f * TAU) * 0.5 + sin(t * f * 1.5 * TAU) * 0.4) * _env(u, 0.03, 1.6))
+	# --- FUNNY KILL SOUNDS ---
+	# Pop: silly high-pitched pop for Swarmlets (small, fast)
+	_streams["pop"] = _bake(0.14, func(t: float, u: float) -> float:
+		var f: float = lerpf(1200.0, 400.0, pow(u, 0.3))
+		return sin(t * f * TAU) * 0.8 * _env(u, 0.005, 4.0))
+
+	# Splat: wet cartoon splat for Shades
+	_streams["splat"] = _bake(0.18, func(t: float, u: float) -> float:
+		var f: float = lerpf(300.0, 80.0, pow(u, 0.4))
+		return (_noise() * 0.6 + sin(t * f * TAU) * 0.4) * _env(u, 0.003, 3.5))
+
+	# Crunch: meaty satisfying crunch for Brutes
+	_streams["crunch"] = _bake(0.25, func(t: float, u: float) -> float:
+		var f: float = lerpf(180.0, 50.0, pow(u, 0.6))
+		return (_noise() * 0.7 + _square(t * f) * 0.5 + sin(t * 90.0 * TAU) * 0.3) * _env(u, 0.002, 2.5))
+
+	# Squeak: funny high squeak for Spitters
+	_streams["squeak"] = _bake(0.16, func(t: float, u: float) -> float:
+		var f: float = lerpf(1800.0, 600.0, pow(u, 0.2))
+		var vibrato := 1.0 + 0.3 * sin(t * 30.0 * TAU)
+		return sin(t * f * TAU * vibrato) * 0.7 * _env(u, 0.005, 4.5))
+
+	# Splat2: deeper variant for variety
+	_streams["splat2"] = _bake(0.20, func(t: float, u: float) -> float:
+		var f: float = lerpf(220.0, 60.0, pow(u, 0.5))
+		return (_noise() * 0.5 + _saw(t * f) * 0.4) * _env(u, 0.004, 3.0))
+
+	# Mini fanfare: tiny trumpety victory for elite kills
+	_streams["fanfare"] = _bake(0.45, func(t: float, u: float) -> float:
+		var step := floorf(u * 4.0)
+		var f: float = [784.0, 988.0, 1175.0, 1568.0][int(step)]
+		return (sin(t * f * TAU) * 0.65 + _square(t * f * TAU) * 0.15) * _env(fposmod(u * 4.0, 1.0) * 0.999 + 0.001, 0.02, 1.8))
+
+	# Combo: escalating pitch ping for streak kills
+	_streams["combo3"] = _bake(0.12, func(t: float, u: float) -> float:
+		return sin(t * 1047.0 * TAU) * 0.7 * _env(u, 0.005, 5.0))
+
+	_streams["combo5"] = _bake(0.15, func(t: float, u: float) -> float:
+		return sin(t * 1319.0 * TAU) * 0.75 * _env(u, 0.005, 5.0))
+
+	_streams["combo10"] = _bake(0.22, func(t: float, u: float) -> float:
+		var step := floorf(u * 3.0)
+		var f: float = [1319.0, 1568.0, 2093.0][int(step)]
+		return sin(t * f * TAU) * 0.8 * _env(fposmod(u * 3.0, 1.0) * 0.999 + 0.001, 0.01, 3.0))
+

@@ -219,7 +219,7 @@ func _spawn_one(kind: ShadowEnemy.Kind) -> void:
 		world.add_child(e)
 	var elite := level >= 3 and rng.randf() < minf(0.02 * (level - 2), 0.20)
 	if elite:
-		Audio.play("elite", -6.0)
+		Audio.play("fanfare", -4.0)
 	e.setup(kind, player, rng, elite)
 	e.speed *= _speed_scale()
 	e.global_position = _ring_point()
@@ -500,6 +500,15 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	_streak_t = COMBO_WINDOW
 	if streak >= 3:
 		hud.combo_pop(streak)
+		# Funny combo sounds
+		if streak == 3:
+			Audio.play("combo3", -5.0)
+		elif streak == 5:
+			Audio.play("combo5", -4.0)
+		elif streak == 10:
+			Audio.play("combo10", -3.0)
+		elif streak % 10 == 0:
+			Audio.play("combo10", -2.0)
 	if streak > 0 and streak % 5 == 0:
 		for i in range(mini(1 + streak / 10, 3)):
 			_acquire_mote().drop(e.global_position, 1)
@@ -507,7 +516,18 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	var eye: Color = ShadowEnemy.STATS[e.kind]["eye"]
 	_burst(e.global_position, eye)
 	spawn_ring(e.global_position, 44.0, Color(eye.r, eye.g, eye.b, 0.85))
-	Audio.play("die", -5.0)
+	# Funny kill sound per enemy type
+	match e.kind:
+		ShadowEnemy.Kind.SWARMLET:
+			Audio.play("pop", -3.0)
+		ShadowEnemy.Kind.SHADE:
+			Audio.play("splat", -4.0)
+		ShadowEnemy.Kind.SPITTER:
+			Audio.play("squeak", -3.0)
+		ShadowEnemy.Kind.BRUTE:
+			Audio.play("crunch", -2.0)
+		_:
+			Audio.play("splat2", -4.0)
 	if e.kind == ShadowEnemy.Kind.BRUTE:
 		Audio.play("thud", -2.0)
 		shake(5.0)
