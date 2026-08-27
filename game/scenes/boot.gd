@@ -11,7 +11,7 @@ var _shop_root: CanvasLayer = null
 
 func _ready() -> void:
 	GameState.change_state(GameState.State.MENU)
-	version_label.text = "v0.0.7"
+	version_label.text = "v0.0.38"
 	var save := SaveSystem.load_save()
 	var runs := int(save.get("runs", 0))
 	if runs > 0:
