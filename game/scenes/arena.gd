@@ -11,7 +11,7 @@ const JOY_RADIUS := 70.0
 const BETWEEN_LEVELS := 2.4
 const COMBO_WINDOW := 3.2
 
-var WEAPON_CLASSES := {"pulse": PulseWeapon, "orbit": OrbitBlades, "nova": NovaBurst}
+var WEAPON_CLASSES := {"pulse": PulseWeapon, "orbit": OrbitBlades, "nova": NovaBurst, "lightning": LightningChain, "frost": FrostNova, "flame": FlameTrail}
 
 var world: Node2D
 var grid: GridLayer
@@ -351,6 +351,19 @@ func nearest_enemy(pos: Vector2, max_dist: float) -> ShadowEnemy:
 	var best_d := max_dist
 	for e in enemies:
 		if not e.active:
+			continue
+		var d: float = pos.distance_to(e.global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
+func nearest_enemy_excluding(pos: Vector2, max_dist: float, excluded: Array[ShadowEnemy]) -> ShadowEnemy:
+	var best: ShadowEnemy = null
+	var best_d := max_dist
+	for e in enemies:
+		if not e.active or excluded.has(e):
 			continue
 		var d: float = pos.distance_to(e.global_position)
 		if d < best_d:
