@@ -284,14 +284,20 @@ func _director(delta: float) -> void:
 	if _spawn_timer <= 0.0 and not _spawn_queue.is_empty():
 		_spawn_timer = clampf(0.55 - level * 0.03, 0.15, 0.55)
 		_spawn_one(_spawn_queue.pop_back())
+	# Level clear check (runs every frame to avoid being blocked by powerup code)
+	if not _in_between and not _ending and not get_tree().paused:
+		if _spawn_queue.is_empty() and _alive_enemies() == 0 and _alive_funny() == 0 and not _boss_active and not _miniboss_active:
+			_level_cleared()
 	# Periodic random powerup spawn on screen — faster as levels increase
 	_powerup_timer -= delta
-	if _powerup_timer <= 0.0 and not _ending:
+	if _powerup_timer <= 0.0 and not _ending and not _in_between and player != null and is_instance_valid(player):
 		_powerup_timer = randf_range(3.0, 7.0)
 		var angle := rng.randf() * TAU
 		var dist := randf_range(200.0, 350.0)
 		var drop_pos := player.global_position + Vector2.from_angle(angle) * dist
-		_acquire_pickup().spawn(_random_orb_kind(), drop_pos)
+		var pickup := _acquire_pickup()
+		if pickup != null:
+			pickup.spawn(_random_orb_kind(), drop_pos)
 		# Small sparkle effect
 		var p := CPUParticles2D.new()
 		p.position = world.to_local(drop_pos)
@@ -309,8 +315,6 @@ func _director(delta: float) -> void:
 		p.color = Color(1.0, 0.72, 0.0, 0.7)
 		world.add_child(p)
 		get_tree().create_timer(0.6).timeout.connect(p.queue_free)
-	if _spawn_queue.is_empty() and _alive_enemies() == 0 and _alive_funny() == 0 and not _boss_active and not get_tree().paused:
-		_level_cleared()
 
 
 func _alive_enemies() -> int:
