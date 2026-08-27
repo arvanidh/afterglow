@@ -66,6 +66,13 @@ var _shake := 0.0
 var _ending := false
 var _results_ready := false
 
+# environmental hazards + mini-boss
+var _hazards: Array = []
+var _hazard_timer := 0.0
+var _miniboss: MiniBoss = null
+var _miniboss_active := false
+var _miniboss_spawned := false
+
 
 func _ready() -> void:
 	if RunState.is_daily:
@@ -255,6 +262,12 @@ func _build_level(n: int) -> void:
 	# Spawn boss every 10 levels
 	if n > 0 and n % 10 == 0:
 		_spawn_boss(n)
+	# Mini-boss at levels 5, 15, 25
+	elif n in [5, 15, 25] and not _miniboss_active:
+		_spawn_miniboss(n)
+	# Environmental hazards per biome (after level 2)
+	if n >= 3:
+		_spawn_hazards(n)
 
 
 func _director(delta: float) -> void:
@@ -444,6 +457,98 @@ func _on_boss_died(boss: Boss) -> void:
 		if is_instance_valid(self) and not _ending:
 			_level_cleared()
 	)
+
+
+func _spawn_hazards(n: int) -> void:
+	# Clear old hazards
+	for h in _hazards:
+		if is_instance_valid(h):
+			h.release()
+			h.queue_free()
+	_hazards.clear()
+	# Determine hazard kind by biome
+	var biome_id := "promenade"
+	if n > 10 and n <= 20:
+		biome_id = "sewers"
+	elif n > 20:
+		biome_id = "sky"
+	var hazard_kind: EnvHazard.Kind
+	match biome_id:
+		"sewers":
+			hazard_kind = EnvHazard.Kind.TOXIC_PUDDLE
+		"sky":
+			hazard_kind = EnvHazard.Kind.FALLING_DEBRIS
+		_:
+			hazard_kind = EnvHazard.Kind.ELECTRIC_FENCE
+	# Spawn 3-5 hazards scattered around the arena
+	var count := rng.randi_range(3, 5)
+	for i in range(count):
+		var h := EnvHazard.new()
+		world.add_child(h)
+		var ang := rng.randf() * TAU
+		var dist := rng.randf_range(200.0, 500.0)
+		h.global_position = player.global_position + Vector2.from_angle(ang) * dist
+		h.activate(hazard_kind, h.global_position)
+		_hazards.append(h)
+
+
+func _spawn_miniboss(n: int) -> void:
+	if _miniboss != null and is_instance_valid(_miniboss):
+		return
+	var mb_kind: MiniBoss.Kind
+	match n:
+		5:
+			mb_kind = MiniBoss.Kind.SENTINEL
+		15:
+			mb_kind = MiniBoss.Kind.CRAWLER
+		_:
+			mb_kind = MiniBoss.Kind.ORACLE
+	_miniboss = MiniBoss.new()
+	_miniboss.setup(mb_kind, player)
+	_miniboss.died.connect(_on_miniboss_died)
+	world.add_child(_miniboss)
+	_miniboss.global_position = _ring_point()
+	_miniboss_active = true
+	_miniboss_spawned = true
+	Audio.play("level_start", -2.0)
+	hud.show_announcer(MiniBoss.STATS[mb_kind]["name"], Color(1.0, 0.5, 0.0))
+	hud.show_banner("MINI-BOSS: %s" % MiniBoss.STATS[mb_kind]["name"], Color(1.0, 0.5, 0.0), 1.5)
+
+
+func _on_miniboss_died(mb: MiniBoss) -> void:
+	_miniboss_active = false
+	RunState.kills += 1
+	Audio.play("elite_die", -2.0)
+	hud.show_announcer("MINI-BOSS DOWN", Color(1.0, 0.5, 0.0))
+	# Drop loot
+	var gems: int = MiniBoss.STATS[mb.kind]["gems"]
+	RunState.add_gems(gems)
+	for i in range(5):
+		_acquire_mote().drop(mb.global_position + Vector2.from_angle(randf() * TAU) * 30.0, 2)
+	_acquire_pickup().spawn(Pickup.Kind.CRATE, mb.global_position + Vector2.from_angle(randf() * TAU) * 40.0)
+	_acquire_pickup().spawn(_random_orb_kind(), mb.global_position + Vector2.from_angle(randf() * TAU) * 50.0)
+	hud.spawn_float(mb.global_position, "+%d GEMS" % gems, Color(1.0, 0.5, 0.0))
+	_spawn_death_shockwave(mb.global_position, Color(1.0, 0.5, 0.0, 0.7), 80.0)
+	mb.release()
+	mb.queue_free()
+
+
+func get_player():
+	return player
+
+func _tick_hazards() -> void:
+	for h in _hazards:
+		if is_instance_valid(h) and h.active:
+			h._check_damage()
+
+func _tick_miniboss(delta: float) -> void:
+	if _miniboss == null or not is_instance_valid(_miniboss) or not _miniboss.active:
+		return
+	# Mini-boss contact damage to player
+	if player != null and is_instance_valid(player):
+		var dist: float = _miniboss.global_position.distance_to(player.global_position)
+		if dist < _miniboss.STATS[_miniboss.kind]["radius"] + player.RADIUS:
+			player.take_damage(_miniboss.STATS[_miniboss.kind]["damage"])
 
 
 func _spawn_one(kind) -> void:
@@ -789,6 +894,8 @@ func _process(delta: float) -> void:
 	_orbs_tick(delta)
 	_enemies_vs_player()
 	_bomber_check()
+	_tick_hazards()
+	_tick_miniboss(delta)
 	_shake = maxf(0.0, _shake - delta * 22.0)
 	world.position = Vector2(rng.randf_range(-_shake, _shake), rng.randf_range(-_shake, _shake))
 	camera.position = player.global_position
