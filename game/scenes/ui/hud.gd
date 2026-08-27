@@ -33,6 +33,9 @@ var _announcer_base_y := 0.0
 var _pause_overlay: Control
 var _pause_btn: Label
 var camera: Camera2D
+var _boss_bar: ColorRect
+var _boss_bar_bg: ColorRect
+var _boss_name_label: Label
 
 
 func _ready() -> void:
@@ -409,6 +412,66 @@ func refresh_hp(effective_max: int) -> void:
 		pip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		pip.color = CYAN if i < RunState.hp else Color(1, 1, 1, 0.12)
 		hp_box.add_child(pip)
+
+
+func show_boss_bar(boss_name: String) -> void:
+	if _boss_bar != null:
+		return
+	# Boss name label
+	_boss_name_label = Label.new()
+	_boss_name_label.text = boss_name
+	_boss_name_label.add_theme_font_size_override("font_size", 16)
+	_boss_name_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.1))
+	_boss_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boss_name_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_boss_name_label.offset_left = -150
+	_boss_name_label.offset_right = 150
+	_boss_name_label.offset_top = 90
+	_boss_name_label.offset_bottom = 115
+	add_child(_boss_name_label)
+	# Bar background
+	_boss_bar_bg = ColorRect.new()
+	_boss_bar_bg.color = Color(0.1, 0.1, 0.1, 0.8)
+	_boss_bar_bg.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_boss_bar_bg.offset_left = -140
+	_boss_bar_bg.offset_right = 140
+	_boss_bar_bg.offset_top = 112
+	_boss_bar_bg.offset_bottom = 122
+	add_child(_boss_bar_bg)
+	# Bar fill
+	_boss_bar = ColorRect.new()
+	_boss_bar.color = Color(1.0, 0.3, 0.1)
+	_boss_bar.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_boss_bar.offset_left = -140
+	_boss_bar.offset_right = 140
+	_boss_bar.offset_top = 112
+	_boss_bar.offset_bottom = 122
+	add_child(_boss_bar)
+
+
+func update_boss_bar(hp: int, max_hp: int) -> void:
+	if _boss_bar == null:
+		return
+	var frac := float(hp) / float(max_hp)
+	_boss_bar.offset_right = -140 + 280.0 * frac
+	if frac > 0.5:
+		_boss_bar.color = Color(1.0, 0.3, 0.1)
+	elif frac > 0.25:
+		_boss_bar.color = Color(1.0, 0.8, 0.2)
+	else:
+		_boss_bar.color = Color(1.0, 0.1, 0.1)
+
+
+func hide_boss_bar() -> void:
+	if _boss_bar != null:
+		_boss_bar.queue_free()
+		_boss_bar = null
+	if _boss_bar_bg != null:
+		_boss_bar_bg.queue_free()
+		_boss_bar_bg = null
+	if _boss_name_label != null:
+		_boss_name_label.queue_free()
+		_boss_name_label = null
 
 
 func flash_damage() -> void:

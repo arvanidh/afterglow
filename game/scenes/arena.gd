@@ -29,6 +29,8 @@ var orbs: Array[SpitOrb] = []
 var motes: Array[LightMote] = []
 var pickups: Array[Pickup] = []
 var rings: Array[FxRing] = []
+var _boss: Boss = null
+var _boss_active := false
 
 # progression
 var level := 1
@@ -152,16 +154,23 @@ func _build_level(n: int) -> void:
 		var bombers := mini((n - 4) * 2, 6)
 		for i in range(bombers):
 			_spawn_queue.append(ShadowEnemy.Kind.BOMBER)
-	# Fisher-Yates with the run's seeded rng — same layout every replay of a seed.
-	for i in range(_spawn_queue.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var tmp := _spawn_queue[i]
-		_spawn_queue[i] = _spawn_queue[j]
-		_spawn_queue[j] = tmp
+	# Boss levels: 10, 20, 30
+	if n == 10 or n == 20 or n == 30:
+		_spawn_queue.clear()  # No minions during boss
+	else:
+		# Fisher-Yates with the run's seeded rng — same layout every replay of a seed.
+		for i in range(_spawn_queue.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var tmp := _spawn_queue[i]
+			_spawn_queue[i] = _spawn_queue[j]
+			_spawn_queue[j] = tmp
 	level = n
 	_in_between = false
 	_spawn_timer = 0.3
 	hud.set_level(n, _spawn_queue.size())
+	# Spawn boss at levels 10, 20, 30
+	if n == 10 or n == 20 or n == 30:
+		_spawn_boss(n)
 
 
 func _director(delta: float) -> void:
@@ -253,6 +262,72 @@ func _speed_scale() -> float:
 func _ring_point() -> Vector2:
 	var ang := rng.randf() * TAU
 	return player.global_position + Vector2.from_angle(ang) * rng.randf_range(SPAWN_RING_MIN, SPAWN_RING_MAX)
+
+
+func _spawn_boss(level_num: int) -> void:
+	var boss_kind: Boss.Kind
+	if level_num == 10:
+		boss_kind = Boss.Kind.WATCHER
+	elif level_num == 20:
+		boss_kind = Boss.Kind.DEVOURER
+	else:
+		boss_kind = Boss.Kind.VOID
+	_boss = Boss.new()
+	_boss.setup(boss_kind, player)
+	_boss.died.connect(_on_boss_died)
+	world.add_child(_boss)
+	_boss.global_position = _ring_point()
+	_boss_active = true
+	# Boss intro
+	Audio.play("level_start", -1.0)
+	hud.show_announcer(Boss.STATS[boss_kind]["name"], Color(1.0, 0.2, 0.1))
+	hud.show_banner("BOSS: %s" % Boss.STATS[boss_kind]["name"], Color(1.0, 0.2, 0.1), 2.0)
+	hud.show_boss_bar(Boss.STATS[boss_kind]["name"])
+	# Camera shake for dramatic entrance
+	shake(8.0)
+
+
+func _on_boss_died(boss: Boss) -> void:
+	_boss_active = false
+	hud.hide_boss_bar()
+	# Boss death effects
+	shake(12.0)
+	Audio.play("elite_die", -1.0)
+	hud.show_announcer("BOSS DEFEATED", Color(0.0, 1.0, 0.5))
+	# Drop lots of loot
+	for i in range(5):
+		_acquire_mote().drop(boss.global_position + Vector2.from_angle(randf() * TAU) * 40.0, 2)
+	_acquire_pickup().spawn(Pickup.Kind.CRATE, boss.global_position + Vector2.from_angle(randf() * TAU) * 30.0)
+	_acquire_pickup().spawn(_random_orb_kind(), boss.global_position + Vector2.from_angle(randf() * TAU) * 50.0)
+	_acquire_pickup().spawn(_random_orb_kind(), boss.global_position + Vector2.from_angle(randf() * TAU) * 60.0)
+	RunState.add_gems(10)
+	hud.spawn_float(boss.global_position, "+10 GEMS", Color(1.0, 0.72, 0.0))
+	# Big shockwave
+	_spawn_death_shockwave(boss.global_position, Color(0.0, 1.0, 0.5, 0.8), 150.0)
+	# Boss loot explosion particles
+	for i in range(24):
+		var p := CPUParticles2D.new()
+		p.position = world.to_local(boss.global_position)
+		p.one_shot = true
+		p.emitting = true
+		p.amount = 8
+		p.lifetime = 1.2
+		p.explosiveness = 1.0
+		p.spread = 180.0
+		p.gravity = Vector2.ZERO
+		p.initial_velocity_min = 100.0
+		p.initial_velocity_max = 300.0
+		p.scale_amount_min = 3.0
+		p.scale_amount_max = 8.0
+		p.color = Color(randf(), randf(), 0.3, 0.9)
+		world.add_child(p)
+		get_tree().create_timer(2.0).timeout.connect(p.queue_free)
+	_boss.release()
+	_boss = null
+	# Mark level cleared after boss death
+	get_tree().create_timer(1.5).timeout.connect(func():
+		_level_cleared()
+	)
 
 
 func _spawn_one(kind: ShadowEnemy.Kind) -> void:
@@ -440,6 +515,9 @@ func _process(delta: float) -> void:
 	hud.update_radar(enemies, player.global_position)
 	hud.set_xp(float(xp) / float(xp_need()), plevel)
 	hud.set_gems(RunState.gems_earned)
+	# Boss health bar
+	if _boss != null and _boss.active:
+		hud.update_boss_bar(_boss.hp, _boss.max_hp)
 	hud.fade_vignette(delta)
 	var dfrac := -1.0 if player.dash_cd <= 0.0 else player.dash_cd / (PlayerSpark.DASH_BASE_CD * float(player.mods["dash_cd_mult"]))
 	hud.tick_dash(dfrac)
@@ -508,6 +586,15 @@ func _bolts_vs_enemies() -> void:
 	for b in bolts:
 		if not b.active:
 			continue
+		# Check boss first
+		if _boss != null and _boss.active:
+			if b.global_position.distance_squared_to(_boss.global_position) < pow(_boss.radius + 6.0, 2.0):
+				b.deactivate()
+				Audio.play("hit", -6.0)
+				hud.spawn_float(_boss.global_position, str(b.damage), Color(1.0, 0.8, 0.2))
+				if _boss.take_hit(b.damage):
+					_on_boss_died(_boss)
+				continue
 		for e in enemies:
 			if not e.active:
 				continue
@@ -531,6 +618,11 @@ func _orbs_tick(delta: float) -> void:
 func _enemies_vs_player() -> void:
 	if _ending:
 		return
+	# Boss contact damage
+	if _boss != null and _boss.active and not _boss._invulnerable:
+		var contact := _boss.radius + PlayerSpark.RADIUS - 3.0
+		if _boss.global_position.distance_squared_to(player.global_position) < contact * contact:
+			player.try_take_damage(_boss.damage, _boss.global_position)
 	for e in enemies:
 		if not e.active:
 			continue

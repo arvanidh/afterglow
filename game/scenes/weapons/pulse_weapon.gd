@@ -45,12 +45,25 @@ func _process(delta: float) -> void:
 	_cd -= delta * rate_total
 	if _cd > 0.0:
 		return
-	var target: ShadowEnemy = arena.nearest_enemy(global_position, RANGE)
-	if target == null:
+	# Target boss first, then nearest regular enemy
+	var target_pos: Vector2 = Vector2.ZERO
+	var has_target := false
+	if arena._boss != null and arena._boss.active:
+		var boss_dist := global_position.distance_to(arena._boss.global_position)
+		if boss_dist < RANGE:
+			target_pos = arena._boss.global_position
+			has_target = true
+	if not has_target:
+		var target: ShadowEnemy = arena.nearest_enemy(global_position, RANGE)
+		if target == null:
+			return
+			target_pos = target.global_position
+			has_target = true
+	if not has_target:
 		return
 	_cd = float(_stats()["interval"])
-	var origin := global_position + (_dir_to(target) * PlayerSpark.RADIUS)
-	var dir := _dir_to(target)
+	var origin := global_position + (global_position.direction_to(target_pos) * PlayerSpark.RADIUS)
+	var dir := global_position.direction_to(target_pos)
 	var bolt: PulseBolt = arena.acquire_bolt()
 	bolt.launch(origin, dir, int(ceilf(float(_stats()["damage"]) * float(mods.get("dmg_mult", 1.0)))))
 	Audio.play("shoot", -8.0)
