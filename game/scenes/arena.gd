@@ -898,14 +898,14 @@ func _enemies_vs_player() -> void:
 	for e in snapshot_enemies:
 		if not e.active:
 			continue
-		var contact := e.radius + PlayerSpark.RADIUS - 3.0
+		var contact: float = e.radius + PlayerSpark.RADIUS - 3.0
 		if e.global_position.distance_squared_to(player.global_position) < contact * contact:
 			if player.try_take_damage(e.damage, e.global_position):
 				e.shove((e.global_position - player.global_position).normalized(), 14.0)
 	for f in funny_enemies:
 		if not f.active:
 			continue
-		var contact_f := f.radius + PlayerSpark.RADIUS - 3.0
+		var contact_f: float = f.radius + PlayerSpark.RADIUS - 3.0
 		if f.global_position.distance_squared_to(player.global_position) < contact_f * contact_f:
 			if player.try_take_damage(f.damage, f.global_position):
 				f.shove((f.global_position - player.global_position).normalized(), 14.0)
@@ -918,9 +918,9 @@ func _bomber_check() -> void:
 			continue
 		if e.should_explode():
 			# Bomb explosion — area damage to player
-			var dist := e.global_position.distance_to(player.global_position)
+			var dist: float = e.global_position.distance_to(player.global_position)
 			if dist < 160.0:
-				var dir := (player.global_position - e.global_position).normalized()
+				var dir: Vector2 = (player.global_position - e.global_position).normalized()
 				player.try_take_damage(2, e.global_position)
 				player._knockback = dir * 300.0
 			# Explosion visual
