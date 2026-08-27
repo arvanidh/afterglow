@@ -352,8 +352,10 @@ func _build_announcer() -> void:
 	_announcer_base_y = _announcer_label.position.y
 
 func show_announcer(text: String, col: Color) -> void:
-	if _announcer_label == null:
+	if _announcer_label == null or not is_instance_valid(_announcer_label):
 		_build_announcer()
+	if not is_instance_valid(_announcer_label):
+		return
 	_kill_announcer_tweens()
 	_announcer_label.text = text
 	_announcer_label.add_theme_color_override("font_color", col)
@@ -383,6 +385,8 @@ func _kill_announcer_tweens() -> void:
 # ---------------------------------------------------------------- standard API
 
 func show_banner(text: String, col: Color, hold := 1.1) -> void:
+	if _banner == null or not is_instance_valid(_banner):
+		return
 	_banner.text = text
 	_banner.add_theme_color_override("font_color", col)
 	var tw := create_tween()
@@ -492,14 +496,20 @@ func flash_damage() -> void:
 
 
 func flash_kill() -> void:
+	if vignette == null or not is_instance_valid(vignette):
+		return
 	vignette.color = Color(1.0, 1.0, 1.0, 0.18)
 
 
 func flash_level_up() -> void:
+	if vignette == null or not is_instance_valid(vignette):
+		return
 	vignette.color = Color(0.0, 0.94, 1.0, 0.25)
 
 
 func fade_vignette(delta: float) -> void:
+	if vignette == null or not is_instance_valid(vignette):
+		return
 	vignette.color.a = maxf(0.0, vignette.color.a - delta * 2.5)
 
 

@@ -46,7 +46,11 @@ func _process(delta: float) -> void:
 	queue_redraw()
 	if _age > LIFE - 3.0:  # expiry blink
 		visible = fposmod(_age * 6.0, 2.0) < 1.2
-	if arena == null or arena._ending:
+	if arena == null or not is_instance_valid(arena):
+		return
+	if arena._ending:
+		return
+	if arena.player == null or not is_instance_valid(arena.player):
 		return
 	if global_position.distance_squared_to(arena.player.global_position) < pow(COLLECT_RANGE, 2.0):
 		_collect()
@@ -54,6 +58,8 @@ func _process(delta: float) -> void:
 
 func _collect() -> void:
 	Audio.play("powerup", -3.0)
+	if arena == null or not is_instance_valid(arena):
+		return
 	match kind:
 		Kind.CRATE:
 			arena.swap_weapon_random()
