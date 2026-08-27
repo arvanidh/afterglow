@@ -8,7 +8,7 @@ const SAVE_PATH := "user://daily.json"
 func get_today_seed() -> int:
 	# Seed based on year/month/day — same for everyone on the same day
 	var today := Time.get_datetime_dict_from_system()
-	var hash_val := today["year"] * 10000 + today["month"] * 100 + today["day"]
+	var hash_val: int = int(today["year"]) * 10000 + int(today["month"]) * 100 + int(today["day"])
 	return hash_val
 
 
@@ -34,7 +34,7 @@ func get_daily_best() -> Dictionary:
 func save_daily_result(level: int, kills: int, gems: int, time: float) -> void:
 	var data := _load()
 	var date_str := get_today_string()
-	var prev := data.get(date_str, {})
+	var prev: Dictionary = data.get(date_str, {}) as Dictionary
 	# Only save if better than previous
 	if level > int(prev.get("level", 0)):
 		data[date_str] = {

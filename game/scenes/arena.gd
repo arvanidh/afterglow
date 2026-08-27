@@ -28,6 +28,7 @@ var bolts: Array[PulseBolt] = []
 var orbs: Array[SpitOrb] = []
 var motes: Array[LightMote] = []
 var pickups: Array[Pickup] = []
+var funny_enemies: Array[FunnyEnemy] = []
 var rings: Array[FxRing] = []
 var _boss: Boss = null
 var _boss_active := false
@@ -211,6 +212,19 @@ func _build_level(n: int) -> void:
 		var bombers := mini((n - 4) * 2, 6 + inf / 3)
 		for i in range(bombers):
 			_spawn_queue.append(ShadowEnemy.Kind.BOMBER)
+	# Funny enemies: appear from level 3+
+	if n >= 3:
+		var jokers := mini((n - 2) / 3, 3 + inf / 5)
+		for i in range(jokers):
+			_spawn_queue.append("joker")
+	if n >= 4:
+		var ducks := mini((n - 3) / 4, 2 + inf / 6)
+		for i in range(ducks):
+			_spawn_queue.append("rubber_duck")
+	if n >= 6:
+		var pinatas := mini((n - 5) / 5, 2 + inf / 8)
+		for i in range(pinatas):
+			_spawn_queue.append("pinata")
 	# Boss every 10 levels: 10, 20, 30, 40, 50...
 	if n > 0 and n % 10 == 0:
 		_spawn_queue.clear()
@@ -271,7 +285,7 @@ func _director(delta: float) -> void:
 		p.color = Color(1.0, 0.72, 0.0, 0.7)
 		world.add_child(p)
 		get_tree().create_timer(0.6).timeout.connect(p.queue_free)
-	if _spawn_queue.is_empty() and _alive_enemies() == 0 and not get_tree().paused:
+	if _spawn_queue.is_empty() and _alive_enemies() == 0 and _alive_funny() == 0 and not get_tree().paused:
 		_level_cleared()
 
 
@@ -327,7 +341,7 @@ func _level_cleared() -> void:
 
 
 func remaining_count() -> int:
-	return _spawn_queue.size() + _alive_enemies()
+	return _spawn_queue.size() + _alive_enemies() + _alive_funny()
 
 
 # ---------------------------------------------------------------- spawning
@@ -413,7 +427,11 @@ func _on_boss_died(boss: Boss) -> void:
 	)
 
 
-func _spawn_one(kind: ShadowEnemy.Kind) -> void:
+func _spawn_one(kind) -> void:
+	# Handle funny enemies (string kind)
+	if kind is String:
+		_spawn_funny(kind)
+		return
 	if enemies.size() >= MAX_ACTIVE_ENEMIES or _ending:
 		return
 	var e: ShadowEnemy = _enemy_pool.pop_back() if not _enemy_pool.is_empty() else ShadowEnemy.new()
@@ -428,6 +446,127 @@ func _spawn_one(kind: ShadowEnemy.Kind) -> void:
 	e.global_position = _ring_point()
 	enemies.append(e)
 
+
+func _spawn_funny(id: String) -> void:
+	if funny_enemies.size() >= 10 or _ending:
+		return
+	var f: FunnyEnemy = FunnyEnemy.new()
+	var kind_map := {"joker": FunnyEnemy.Kind.JOKER, "rubber_duck": FunnyEnemy.Kind.RUBBER_DUCK, "pinata": FunnyEnemy.Kind.PIÑATA}
+	if not kind_map.has(id):
+		return
+	f.setup(kind_map[id], player, rng)
+	f.global_position = _ring_point()
+	world.add_child(f)
+	funny_enemies.append(f)
+
+
+func kill_funny_enemy(f: FunnyEnemy) -> void:
+	RunState.kills += 1
+	streak += 1
+	_streak_t = COMBO_WINDOW
+	Missions.track_kill()
+	if streak >= 3:
+		hud.combo_pop(streak)
+		if streak == 3:
+			Audio.play("combo3", -5.0)
+			hud.show_announcer("TRIPLE KILL", Color(1.0, 0.94, 0.0))
+		elif streak == 5:
+			Audio.play("combo5", -4.0)
+			hud.show_announcer("MEGA KILL", Color(1.0, 0.45, 0.2))
+		elif streak == 10:
+			Audio.play("combo10", -3.0)
+			hud.show_announcer("ULTRA KILL", Color(1.0, 0.2, 0.2))
+			shake(5.0)
+		elif streak == 20:
+			Audio.play("combo10", -2.0)
+			hud.show_announcer("HYPER KILL", Color(1.0, 0.0, 0.6))
+			shake(8.0)
+	Missions.track_combo(streak)
+	var s: Dictionary = FunnyEnemy.STATS[f.kind]
+	match f.kind:
+		FunnyEnemy.Kind.JOKER:
+			Audio.play("honk", -1.0)
+			shake(3.0)
+			hud.show_announcer("JOKER DOWN", Color(1.0, 0.18, 0.53))
+			for i in range(16):
+				var p := CPUParticles2D.new()
+				p.position = world.to_local(f.global_position)
+				p.one_shot = true; p.emitting = true; p.amount = 6
+				p.lifetime = 1.0; p.explosiveness = 1.0; p.spread = 180.0
+				p.gravity = Vector2(0, 80.0)
+				p.initial_velocity_min = 60.0; p.initial_velocity_max = 200.0
+				p.scale_amount_min = 2.0; p.scale_amount_max = 5.0
+				p.color = Color.from_hsv(randf(), 0.8, 0.9)
+				world.add_child(p)
+				get_tree().create_timer(1.2).timeout.connect(p.queue_free)
+			_spawn_death_shockwave(f.global_position, Color(1.0, 0.18, 0.53, 0.7), 60.0)
+			RunState.add_gems(5)
+			hud.spawn_float(f.global_position, "+5 GEMS", Color(1.0, 0.72, 0.0))
+		FunnyEnemy.Kind.RUBBER_DUCK:
+			Audio.play("squeak", -1.0)
+			Audio.play("squeak", -2.0)
+			shake(2.0)
+			hud.show_announcer("QUACK!", Color(1.0, 0.9, 0.0))
+			for i in range(12):
+				var p := CPUParticles2D.new()
+				p.position = world.to_local(f.global_position)
+				p.one_shot = true; p.emitting = true; p.amount = 4
+				p.lifetime = 0.8; p.explosiveness = 1.0; p.spread = 180.0
+				p.initial_velocity_min = 40.0; p.initial_velocity_max = 150.0
+				p.scale_amount_min = 1.5; p.scale_amount_max = 3.5
+				p.color = Color(1.0, 0.85, 0.0, 0.9)
+				world.add_child(p)
+				get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+			_spawn_death_shockwave(f.global_position, Color(1.0, 0.9, 0.0, 0.6), 50.0)
+			RunState.add_gems(3)
+			hud.spawn_float(f.global_position, "+3 GEMS", Color(1.0, 0.72, 0.0))
+		FunnyEnemy.Kind.PIÑATA:
+			Audio.play("combo5", -1.0)
+			shake(6.0)
+			hud.show_announcer("PIÑATA SMASHED!", Color(0.0, 1.0, 0.5))
+			for i in range(20):
+				var p := CPUParticles2D.new()
+				p.position = world.to_local(f.global_position)
+				p.one_shot = true; p.emitting = true; p.amount = 8
+				p.lifetime = 1.2; p.explosiveness = 1.0; p.spread = 180.0
+				p.gravity = Vector2(0, 120.0)
+				p.initial_velocity_min = 80.0; p.initial_velocity_max = 280.0
+				p.scale_amount_min = 2.0; p.scale_amount_max = 6.0
+				p.color = Color.from_hsv(randf(), 0.9, 1.0)
+				world.add_child(p)
+				get_tree().create_timer(1.5).timeout.connect(p.queue_free)
+			for i in range(s["gems"]):
+				_acquire_mote().drop(f.global_position + Vector2.from_angle(randf() * TAU) * (20.0 + i * 8.0), 1)
+			RunState.add_gems(10)
+			hud.spawn_float(f.global_position, "+10 GEMS", Color(1.0, 0.72, 0.0))
+			_acquire_pickup().spawn(Pickup.Kind.CRATE, f.global_position + Vector2.from_angle(randf() * TAU) * 30.0)
+			_spawn_death_shockwave(f.global_position, Color(0.0, 1.0, 0.5, 0.8), 80.0)
+	_burst(f.global_position, s["eye"])
+	spawn_ring(f.global_position, 44.0, Color(s["eye"].r, s["eye"].g, s["eye"].b, 0.85))
+	Engine.time_scale = 0.15
+	await get_tree().create_timer(0.06, true, false, true).timeout
+	Engine.time_scale = 1.0
+	hud.flash_kill()
+	var _funny_pool: Array[String] = ["pop", "splat", "squeak", "crunch", "splat2", "boing", "squelch", "honk", "whomp", "doh", "oops"]
+	Audio.play(_funny_pool[rng.randi_range(0, _funny_pool.size() - 1)], -3.0)
+	if streak > 0 and streak % 5 == 0:
+		_acquire_mote().drop(f.global_position, 1)
+		_acquire_pickup().spawn(_random_orb_kind(), f.global_position)
+		hud.spawn_float(f.global_position, "STREAK BONUS", Color(1.0, 0.72, 0.0))
+	if rng.randf() < 0.20:
+		_acquire_pickup().spawn(_random_orb_kind(), f.global_position)
+	funny_enemies.erase(f)
+	f.release()
+	if not _in_between and not _ending:
+		hud.set_level(level, remaining_count())
+
+
+func _alive_funny() -> int:
+	var n := 0
+	for f in funny_enemies:
+		if f.active:
+			n += 1
+	return n
 
 func nearest_enemy(pos: Vector2, max_dist: float) -> ShadowEnemy:
 	var best: ShadowEnemy = null
@@ -631,6 +770,10 @@ func _process(delta: float) -> void:
 	# Boss health bar
 	if _boss != null and _boss.active:
 		hud.update_boss_bar(_boss.hp, _boss.max_hp)
+	# Tick funny enemies
+	for f in funny_enemies:
+		if f.active and is_instance_valid(f):
+			f._dir = (player.global_position - f.global_position).normalized()
 	hud.fade_vignette(delta)
 	var dfrac := -1.0 if player.dash_cd <= 0.0 else player.dash_cd / (PlayerSpark.DASH_BASE_CD * float(player.mods["dash_cd_mult"]))
 	hud.tick_dash(dfrac)
@@ -719,6 +862,17 @@ func _bolts_vs_enemies() -> void:
 				if e.take_hit(b.damage):
 					kill_enemy(e)
 				break
+		# Check funny enemies
+		for f in funny_enemies:
+			if not f.active:
+				continue
+			if b.global_position.distance_squared_to(f.global_position) < pow(f.radius + 6.0, 2.0):
+				b.deactivate()
+				Audio.play("hit", -8.0)
+				hud.spawn_float(f.global_position, str(b.damage), Color(1.0, 0.9, 0.0))
+				if f.take_hit(b.damage):
+					kill_funny_enemy(f)
+				break
 
 
 func _orbs_tick(delta: float) -> void:
@@ -744,6 +898,13 @@ func _enemies_vs_player() -> void:
 		if e.global_position.distance_squared_to(player.global_position) < contact * contact:
 			if player.try_take_damage(e.damage, e.global_position):
 				e.shove((e.global_position - player.global_position).normalized(), 14.0)
+	for f in funny_enemies:
+		if not f.active:
+			continue
+		var contact_f := f.radius + PlayerSpark.RADIUS - 3.0
+		if f.global_position.distance_squared_to(player.global_position) < contact_f * contact_f:
+			if player.try_take_damage(f.damage, f.global_position):
+				f.shove((f.global_position - player.global_position).normalized(), 14.0)
 
 
 func _bomber_check() -> void:
