@@ -11,7 +11,7 @@ const JOY_RADIUS := 70.0
 const BETWEEN_LEVELS := 2.4
 const COMBO_WINDOW := 3.2
 
-var WEAPON_CLASSES := {"pulse": PulseWeapon, "orbit": OrbitBlades, "nova": NovaBurst, "lightning": LightningChain, "frost": FrostNova, "flame": FlameTrail}
+var WEAPON_CLASSES := {"pulse": PulseWeapon, "orbit": OrbitBlades, "nova": NovaBurst, "lightning": LightningChain, "frost": FrostNova, "flame": FlameTrail, "plasma_storm": PlasmaStorm, "thunder_cannon": ThunderCannon, "solar_flare": SolarFlare}
 
 var world: Node2D
 var grid: GridLayer
@@ -537,8 +537,21 @@ func _open_draft() -> void:
 	hud.flash_level_up()
 	spawn_ring(player.global_position, 120.0, Color(1.0, 0.72, 0.0, 0.9))
 	hud.refresh_hp(player.effective_max_hp())
+	# Check for weapon evolution first
+	var evolutions := EvolutionDb.check_available(owned_guns, gun_lv)
+	if not evolutions.is_empty():
+		var evo_id: String = evolutions[0]
+		_equip_weapon(evo_id)
+		owned_guns.append(evo_id)
+		gun_lv[evo_id] = 5
+		var recipe: Dictionary = EvolutionDb.get_recipe(evo_id)
+		hud.show_banner(String(recipe["title"]), recipe["color"], 2.0)
+		shake(6.0)
+		spawn_ring(player.global_position, 140.0, recipe["color"], 0.5)
+		Audio.play("elite_die", -2.0)
+		return
+	# Normal draft
 	var choices := CardDb.draw_three(owned_guns, gun_lv, passives, rng)
-	# Auto-pick best card: prefer weapon upgrades > new weapons > passives
 	var best: Dictionary = choices[0]
 	for card: Dictionary in choices:
 		if card["kind"] == "weapon_up" and current_gun_id() == card["target"]:
