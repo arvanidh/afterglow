@@ -841,6 +841,8 @@ func _draw_joystick() -> void:
 # ---------------------------------------------------------------- collisions
 
 func _bolts_vs_enemies() -> void:
+	if world == null or player == null:
+		return
 	for b in bolts:
 		if not b.active:
 			continue
@@ -887,7 +889,7 @@ func _orbs_tick(delta: float) -> void:
 
 
 func _enemies_vs_player() -> void:
-	if _ending:
+	if _ending or player == null or not is_instance_valid(player):
 		return
 	var snapshot_enemies: Array = enemies.duplicate()
 	# Boss contact damage
@@ -912,6 +914,8 @@ func _enemies_vs_player() -> void:
 
 
 func _bomber_check() -> void:
+	if player == null or not is_instance_valid(player):
+		return
 	var snapshot: Array = enemies.duplicate()
 	for e in snapshot:
 		if not e.active:
@@ -950,6 +954,11 @@ func _acquire_orb() -> SpitOrb:
 
 func kill_enemy(e: ShadowEnemy) -> void:
 	if not is_instance_valid(e) or not e.active:
+		return
+	# Safety: ensure arena state is valid
+	if world == null or not is_instance_valid(world):
+		return
+	if player == null or not is_instance_valid(player):
 		return
 	RunState.kills += 1
 	streak += 1
