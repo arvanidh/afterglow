@@ -84,7 +84,7 @@ func try_dash(dir: Vector2) -> bool:
 	_iframes = maxf(_iframes, DASH_IFRAMES)
 	_dash_dir = dir.normalized() if dir.length_squared() > 0.001 else facing
 	Audio.play("dash", -2.0)
-	Input.vibrate_handheld(20)
+	if Settings.vibration: Input.vibrate_handheld(20)
 	dashed.emit()
 	queue_redraw()
 	return true
@@ -128,7 +128,7 @@ func try_take_damage(amount: int, from_pos: Vector2) -> bool:
 	_iframes = IFRAMES
 	_knockback = (global_position - from_pos).normalized() * 240.0
 	took_damage.emit(RunState.hp)
-	Input.vibrate_handheld(35)
+	if Settings.vibration: Input.vibrate_handheld(35)
 	return true
 
 

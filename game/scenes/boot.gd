@@ -289,6 +289,58 @@ func _open_settings() -> void:
 	content.add_child(_make_toggle("Screen Shake", Settings.screen_shake, func(): Settings.toggle_screen_shake()))
 	# Toggle: Auto Level-Up
 	content.add_child(_make_toggle("Auto Level-Up", Settings.auto_level_up, func(): Settings.toggle_auto_level_up()))
+	# Gameplay
+	content.add_child(_make_toggle("Vibration", Settings.vibration, func(): Settings.toggle_vibration()))
+	content.add_child(_make_toggle("Radar Minimap", Settings.show_radar, func(): Settings.toggle_radar()))
+	content.add_child(_make_toggle("Kill Counter", Settings.show_kill_counter, func(): Settings.toggle_kill_counter()))
+	content.add_child(_make_toggle("Combo Counter", Settings.show_combo_counter, func(): Settings.toggle_combo_counter()))
+	# Accessibility
+	var text_sizes := ["Small", "Medium", "Large"]
+	content.add_child(_make_option("Text Size", text_sizes, Settings.text_size, func(i): Settings.set_text_size(i)))
+	content.add_child(_make_toggle("Colorblind Mode", Settings.colorblind_mode, func(): Settings.toggle_colorblind_mode()))
+	content.add_child(_make_toggle("High Contrast", Settings.high_contrast, func(): Settings.toggle_high_contrast()))
+	# View Stats
+	var stats := Settings.get_stats()
+	var stats_panel := PanelContainer.new()
+	stats_panel.custom_minimum_size = Vector2(0, 120)
+	stats_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var stats_sb := StyleBoxFlat.new()
+	stats_sb.bg_color = Color(0.06, 0.07, 0.14, 0.9)
+	stats_sb.border_color = Color(0.0, 0.94, 1.0, 0.3)
+	stats_sb.set_border_width_all(1)
+	stats_sb.set_corner_radius_all(10)
+	stats_sb.content_margin_left = 16
+	stats_sb.content_margin_right = 16
+	stats_sb.content_margin_top = 12
+	stats_sb.content_margin_bottom = 12
+	stats_panel.add_theme_stylebox_override("panel", stats_sb)
+	var stats_vbox := VBoxContainer.new()
+	stats_vbox.add_theme_constant_override("separation", 4)
+	stats_panel.add_child(stats_vbox)
+	var stats_title := Label.new()
+	stats_title.text = "YOUR STATS"
+	stats_title.add_theme_font_size_override("font_size", 18)
+	stats_title.add_theme_color_override("font_color", Color(0.0, 0.94, 1.0))
+	stats_vbox.add_child(stats_title)
+	var stats_text := Label.new()
+	var m := int(stats["best_time"]) / 60
+	var s := int(stats["best_time"]) % 60
+	stats_text.text = "Runs: %d  |  Kills: %d  |  Gems: %d\nBest Level: %d  |  Best Time: %d:%02d" % [
+		stats["total_runs"], stats["total_kills"], stats["total_gems"],
+		stats["best_level"], m, s]
+	stats_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stats_text.add_theme_font_size_override("font_size", 14)
+	stats_text.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	stats_vbox.add_child(stats_text)
+	content.add_child(stats_panel)
+	# Reset Progress (with confirmation)
+	var reset_btn := Button.new()
+	reset_btn.text = "RESET ALL PROGRESS"
+	reset_btn.custom_minimum_size = Vector2(200, 50)
+	reset_btn.add_theme_font_size_override("font_size", 16)
+	reset_btn.add_theme_color_override("font_color", Color(1.0, 0.3, 0.1))
+	reset_btn.pressed.connect(_confirm_reset)
+	content.add_child(reset_btn)
 	# Back button
 	var close := Button.new()
 	close.text = "BACK"
@@ -736,6 +788,70 @@ func _buy(id: String) -> void:
 		Audio.play("powerup", -2.0)
 		_close_overlay()
 		_open_shop()
+
+
+func _confirm_reset() -> void:
+	# Show confirmation dialog
+	var confirm := CanvasLayer.new()
+	confirm.layer = 30
+	add_child(confirm)
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.8)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	confirm.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	confirm.add_child(center)
+	var panel := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.09, 0.18, 0.98)
+	sb.border_color = Color(1.0, 0.3, 0.1, 0.8)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(16)
+	sb.content_margin_left = 30
+	sb.content_margin_right = 30
+	sb.content_margin_top = 20
+	sb.content_margin_bottom = 20
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 16)
+	panel.add_child(vbox)
+	var warn := Label.new()
+	warn.text = "RESET ALL PROGRESS?"
+	warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	warn.add_theme_font_size_override("font_size", 22)
+	warn.add_theme_color_override("font_color", Color(1.0, 0.3, 0.1))
+	vbox.add_child(warn)
+	var desc := Label.new()
+	desc.text = "This will delete all your saves, gems, upgrades, missions, and daily records. This cannot be undone."
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.add_theme_font_size_override("font_size", 14)
+	desc.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	vbox.add_child(desc)
+	var btn_box := HBoxContainer.new()
+	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_box.add_theme_constant_override("separation", 20)
+	vbox.add_child(btn_box)
+	var cancel := Button.new()
+	cancel.text = "CANCEL"
+	cancel.custom_minimum_size = Vector2(120, 45)
+	cancel.add_theme_font_size_override("font_size", 18)
+	cancel.pressed.connect(func(): confirm.queue_free())
+	btn_box.add_child(cancel)
+	var do_reset := Button.new()
+	do_reset.text = "YES, RESET"
+	do_reset.custom_minimum_size = Vector2(120, 45)
+	do_reset.add_theme_font_size_override("font_size", 18)
+	do_reset.pressed.connect(func():
+		Settings.reset_progress()
+		confirm.queue_free()
+		_close_overlay()
+		# Reload menu to reflect reset state
+		get_tree().reload_current_scene()
+	)
+	btn_box.add_child(do_reset)
 
 
 func _close_overlay() -> void:

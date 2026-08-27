@@ -639,6 +639,10 @@ func _build_radar() -> void:
 
 
 func update_radar(enemies: Array, player_pos: Vector2) -> void:
+	if not Settings.show_radar:
+		_radar.visible = false
+		return
+	_radar.visible = true
 	_radar_enemies = enemies
 	_radar.queue_redraw()
 
