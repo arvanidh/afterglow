@@ -3,7 +3,7 @@ extends Node2D
 ## Drops from shadows and level clears. Crates swap your gun; orbs grant a
 ## timed or instant powerup. Walk over to collect.
 
-enum Kind { CRATE, OVERDRIVE, SHIELD, MAGNET }
+enum Kind { CRATE, OVERDRIVE, SHIELD, MAGNET, SPEED }
 
 const LIFE := 20.0
 const COLLECT_RANGE := 26.0
@@ -13,6 +13,7 @@ const COLORS := {
 	Kind.OVERDRIVE: Color(1.0, 0.18, 0.53),
 	Kind.SHIELD: Color(0.75, 1.0, 1.0),
 	Kind.MAGNET: Color(1.0, 0.72, 0.0),
+	Kind.SPEED: Color(0.3, 1.0, 0.5),
 }
 
 var kind := Kind.CRATE
@@ -63,6 +64,8 @@ func _collect() -> void:
 			arena.hud.refresh_hp(arena.player.effective_max_hp())
 		Kind.MAGNET:
 			arena.vacuum_all_motes()
+		Kind.SPEED:
+			arena.apply_overdrive(5.0)
 	release()
 
 
@@ -79,6 +82,13 @@ func _draw() -> void:
 		draw_polyline(pts + PackedVector2Array([pts[0]]), col, 2.5)
 		draw_line(pts[0], pts[2], Color(col.r, col.g, col.b, 0.5), 1.5)
 		draw_line(pts[1], pts[3], Color(col.r, col.g, col.b, 0.5), 1.5)
+	elif kind == Kind.SPEED:
+		# Lightning bolt icon
+		var pts := PackedVector2Array([
+			Vector2(-4, -12), Vector2(2, -2), Vector2(-1, -2),
+			Vector2(4, 12), Vector2(-2, 2), Vector2(1, 2),
+		])
+		draw_colored_polygon(pts, col)
 	else:
 		draw_circle(Vector2.ZERO, 9.0, Color(col.r, col.g, col.b, 0.85))
 		draw_circle(Vector2.ZERO, 4.0, Color.WHITE)

@@ -178,10 +178,10 @@ func _director(delta: float) -> void:
 	if _spawn_timer <= 0.0 and not _spawn_queue.is_empty():
 		_spawn_timer = clampf(0.55 - level * 0.03, 0.15, 0.55)
 		_spawn_one(_spawn_queue.pop_back())
-	# Periodic random powerup spawn on screen
+	# Periodic random powerup spawn on screen — faster as levels increase
 	_powerup_timer -= delta
 	if _powerup_timer <= 0.0 and not _ending:
-		_powerup_timer = randf_range(6.0, 12.0)
+		_powerup_timer = randf_range(3.0, 7.0)
 		var angle := rng.randf() * TAU
 		var dist := randf_range(200.0, 350.0)
 		var drop_pos := player.global_position + Vector2.from_angle(angle) * dist
@@ -233,6 +233,11 @@ func _level_cleared() -> void:
 	_acquire_pickup().spawn(_random_orb_kind(), player.global_position + Vector2.from_angle(rng.randf() * TAU) * 70.0)
 	RunState.add_gems(2)
 	hud.spawn_float(player.global_position, "+2 GEMS", Color(1.0, 0.72, 0.0))
+	# Give overdrive boost so shooting stays fast after level clear
+	apply_overdrive(4.0)
+	# Reset weapon cooldown so first shot fires instantly in new level
+	if weapon != null:
+		weapon._cd = 0.0
 
 
 func remaining_count() -> int:
@@ -409,9 +414,11 @@ func _process(delta: float) -> void:
 	RunState.run_time += delta if not _ending else 0.0
 	_overdrive_left = maxf(0.0, _overdrive_left - delta)
 	var od := 1.85 if _overdrive_left > 0.0 else 1.0
-	# Always reset rate_scale — prevents drift from overdrive expiry
+	# Combo fire rate bonus: +10% per 5 kills, up to +50% at 25 streak
+	var combo_bonus := 1.0 + clampf(float(streak) / 50.0, 0.0, 0.5)
+	var total_rate := od * combo_bonus
 	if weapon != null:
-		weapon.rate_scale = od
+		weapon.rate_scale = total_rate
 	if _overdrive_left > 0.0:
 		hud.set_powerup("OVERDRIVE %ds" % ceili(_overdrive_left))
 	elif hud.powerup_label.text != "":
@@ -633,14 +640,14 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	elif e.elite:
 		RunState.add_gems(2)
 		hud.spawn_float(e.global_position, "+2 GEMS", Color(1.0, 0.72, 0.0))
-	# drops: elites always pay out; normal shadows rarely
+	# drops: elites always pay out; normal shadows drop more often
 	if e.elite:
-		_acquire_pickup().spawn(Pickup.Kind.CRATE if rng.randf() < 0.35 else _random_orb_kind(), e.global_position)
+		_acquire_pickup().spawn(Pickup.Kind.CRATE if rng.randf() < 0.4 else _random_orb_kind(), e.global_position)
 	else:
 		var r := rng.randf()
-		if r < 0.03:
+		if r < 0.06:
 			_acquire_pickup().spawn(Pickup.Kind.CRATE, e.global_position)
-		elif r < 0.08:
+		elif r < 0.18:
 			_acquire_pickup().spawn(_random_orb_kind(), e.global_position)
 	enemies.erase(e)
 	e.release()
@@ -650,7 +657,15 @@ func kill_enemy(e: ShadowEnemy) -> void:
 
 
 func _random_orb_kind() -> Pickup.Kind:
-	return [Pickup.Kind.OVERDRIVE, Pickup.Kind.SHIELD, Pickup.Kind.MAGNET][rng.randi_range(0, 2)] as Pickup.Kind
+	var roll := rng.randf()
+	if roll < 0.30:
+		return Pickup.Kind.OVERDRIVE
+	elif roll < 0.55:
+		return Pickup.Kind.SHIELD
+	elif roll < 0.80:
+		return Pickup.Kind.MAGNET
+	else:
+		return Pickup.Kind.SPEED
 
 
 func acquire_bolt() -> PulseBolt:

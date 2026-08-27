@@ -105,6 +105,17 @@ func _process(delta: float) -> void:
 		var vel := move_dir * SPEED * float(mods["speed_mult"]) + _knockback
 		position += vel * delta
 	_knockback = _knockback.move_toward(Vector2.ZERO, 900.0 * delta)
+	# Enhanced trail during dash — more particles, brighter
+	if dashing:
+		_trail.amount = 48
+		_trail.initial_velocity_max = 40.0
+		_trail.scale_amount_max = 7.0
+		_trail.color = Color(0.0, 0.94, 1.0, 0.85)
+	else:
+		_trail.amount = 32
+		_trail.initial_velocity_max = 22.0
+		_trail.scale_amount_max = 5.0
+		_trail.color = Color(0.0, 0.94, 1.0, 0.6)
 	_trail.emitting = move_dir.length_squared() > 0.01 or dashing
 	queue_redraw()
 
