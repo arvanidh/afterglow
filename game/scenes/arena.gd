@@ -853,7 +853,7 @@ func _bolts_vs_enemies() -> void:
 				if _boss.take_hit(b.damage):
 					_on_boss_died(_boss)
 				continue
-		var snapshot_e := enemies.duplicate()
+		var snapshot_e: Array = enemies.duplicate()
 		for e in snapshot_e:
 			if not e.active:
 				continue
@@ -889,7 +889,7 @@ func _orbs_tick(delta: float) -> void:
 func _enemies_vs_player() -> void:
 	if _ending:
 		return
-	var snapshot_enemies := enemies.duplicate()
+	var snapshot_enemies: Array = enemies.duplicate()
 	# Boss contact damage
 	if _boss != null and _boss.active and not _boss._invulnerable:
 		var contact := _boss.radius + PlayerSpark.RADIUS - 3.0
@@ -912,7 +912,7 @@ func _enemies_vs_player() -> void:
 
 
 func _bomber_check() -> void:
-	var snapshot := enemies.duplicate()
+	var snapshot: Array = enemies.duplicate()
 	for e in snapshot:
 		if not e.active:
 			continue
