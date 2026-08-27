@@ -68,6 +68,16 @@ var _synergy := "none"
 var _ending := false
 var _results_ready := false
 
+# bioweather
+var _weather_biome := "promenade"
+var _weather_timer := 0.0
+var _weather_interval := 12.0
+var _weather_active := false
+var _weather_duration := 0.0
+var _weather_type := ""
+var _weather_dmg_timer := 0.0
+var _weather_layer: Node2D
+
 # environmental hazards + mini-boss
 var _hazards: Array = []
 var _hazard_timer := 0.0
@@ -106,6 +116,11 @@ func _ready() -> void:
 	camera.position_smoothing_speed = 7.0
 	add_child(camera)
 	camera.make_current()
+	# Weather visual layer (z-indexed above grid, below gameplay)
+	_weather_layer = Node2D.new()
+	_weather_layer.name = "WeatherLayer"
+	_weather_layer.z_index = -5
+	add_child(_weather_layer)
 
 	_joy_node = Node2D.new()
 	var joy_layer := CanvasLayer.new()
@@ -143,6 +158,12 @@ func _set_biome(level_num: int) -> void:
 		biome_id = "sky"
 	grid.set_biome(biome_id)
 	Music.play_biome(biome_id)
+	_weather_biome = biome_id
+	# Weather gets more frequent in later biomes
+	var intervals := {"promenade": [12.0, 18.0], "sewers": [10.0, 15.0], "sky": [8.0, 12.0]}
+	var iv: Array = intervals.get(biome_id, [12.0, 18.0])
+	_weather_timer = rng.randf_range(iv[0], iv[1])
+	_weather_active = false
 	# Apply biome background tint
 	var bg_colors := {
 		"promenade": Color(0.02, 0.02, 0.04),
@@ -575,6 +596,235 @@ func _tick_miniboss(delta: float) -> void:
 			player.take_damage(_miniboss.STATS[_miniboss.kind]["damage"])
 
 
+func _tick_weather(delta: float) -> void:
+	if _ending or _in_between:
+		return
+	if _weather_active:
+		# Weather is happening — tick damage + visuals
+		_weather_duration -= delta
+		_weather_dmg_timer -= delta
+		if _weather_dmg_timer <= 0.0:
+			_tick_weather_damage()
+			_weather_dmg_timer = _weather_damage_interval()
+		_tick_weather_visuals(delta)
+		if _weather_duration <= 0.0:
+			_end_weather()
+		return
+	# Countdown to next weather event
+	_weather_timer -= delta
+	if _weather_timer <= 0.0:
+		_start_weather()
+
+
+func _weather_damage_interval() -> float:
+	match _weather_type:
+		"lightning": return 1.2
+		"acid_rain": return 0.8
+		"fog": return 1.5
+		"wind": return 0.0  # wind pushes, no damage tick
+		"solar_flare": return 999.0  # one-shot
+		_: return 1.0
+
+
+func _start_weather() -> void:
+	_weather_active = true
+	var options: Array = []
+	match _weather_biome:
+		"promenade":
+			options = ["lightning", "solar_flare"]
+		"sewers":
+			options = ["acid_rain", "fog"]
+		"sky":
+			options = ["wind", "lightning"]
+	_weather_type = options[rng.randi_range(0, options.size() - 1)]
+	_weather_duration = rng.randf_range(6.0, 10.0)
+	_weather_dmg_timer = 0.5
+	# Announce weather
+	var weather_names := {
+		"lightning": "STORM INCOMING!",
+		"acid_rain": "ACID RAIN!",
+		"fog": "TOXIC FOG!",
+		"wind": "GUST ALERT!",
+		"solar_flare": "SOLAR FLARE!"
+	}
+	var weather_colors := {
+		"lightning": Color(0.4, 0.7, 1.0),
+		"acid_rain": Color(0.2, 1.0, 0.0),
+		"fog": Color(0.5, 1.0, 0.3),
+		"wind": Color(0.8, 0.9, 1.0),
+		"solar_flare": Color(1.0, 0.9, 0.2)
+	}
+	if hud != null:
+		hud.show_announcer(weather_names.get(_weather_type, "WEATHER!"), weather_colors.get(_weather_type, Color.WHITE), 1.0)
+	# Solar flare is instant
+	if _weather_type == "solar_flare":
+		_solar_flare_hit()
+	shake(4.0)
+
+
+func _end_weather() -> void:
+	_weather_active = false
+	_weather_type = ""
+	_weather_timer = rng.randf_range(_weather_interval * 0.7, _weather_interval * 1.3)
+	# Clear weather visuals
+	for c in _weather_layer.get_children():
+		c.queue_free()
+
+
+func _tick_weather_damage() -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	match _weather_type:
+		"lightning":
+			# Random bolt strikes near player (offset ±200px)
+			var strike_pos: Vector2 = player.global_position + Vector2(
+				rng.randf_range(-200.0, 200.0), rng.randf_range(-200.0, 200.0))
+			# Visual bolt
+			_spawn_lightning_bolt(strike_pos)
+			shake(3.0)
+			Audio.play("elite_die", -6.0)
+			# Damage enemies AND player in 80px radius
+			var snap: Array = enemies.duplicate()
+			for e in snap:
+				if e.active and e.global_position.distance_to(strike_pos) < 80.0:
+					if e.take_hit(3):
+						kill_enemy(e)
+					hud.spawn_float(e.global_position, "ZAP", Color(0.4, 0.7, 1.0))
+			# Also hits player if close
+			if player.global_position.distance_to(strike_pos) < 80.0:
+				player.try_take_damage(1, strike_pos)
+		"acid_rain":
+			# Damage ALL enemies on screen + slow them
+			var snap2: Array = enemies.duplicate()
+			for e in snap2:
+				if e.active and e.global_position.distance_to(camera.position) < 500.0:
+					if e.take_hit(1):
+						kill_enemy(e)
+					hud.spawn_float(e.global_position, "SCORCH", Color(0.2, 1.0, 0.0))
+		"fog":
+			# Periodic damage to player if not near pickups
+			if player.hp > 1 and rng.randf() < 0.3:
+				player.try_take_damage(1, player.global_position)
+				hud.spawn_float(player.global_position, "FOG DMG", Color(0.5, 1.0, 0.3))
+		"wind":
+			# Push ALL entities in a random direction
+			var wind_dir := Vector2.from_angle(randf() * TAU)
+			player._knockback = wind_dir * 120.0
+			var snap3: Array = enemies.duplicate()
+			for e in snap3:
+				if e.active:
+					if e.has_method("shove"):
+						e.shove(wind_dir, 60.0)
+					hud.spawn_float(e.global_position, "GUST", Color(0.8, 0.9, 1.0))
+
+
+func _tick_weather_visuals(delta: float) -> void:
+	# Remove expired visuals
+	for c in _weather_layer.get_children():
+		if c.has_meta("expires") and c.get_meta("expires") < Time.get_ticks_msec() / 1000.0:
+			c.queue_free()
+	# Screen edge tint based on weather
+	match _weather_type:
+		"lightning":
+			# Occasional screen flash
+			if rng.randf() < 0.02:
+				var flash := ColorRect.new()
+				flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+				flash.color = Color(0.4, 0.7, 1.0, 0.06)
+				flash.z_index = 100
+				flash.set_meta("expires", Time.get_ticks_msec() / 1000.0 + 0.1)
+				add_child(flash)
+		"acid_rain":
+			# Green particle rain
+			if rng.randf() < 0.15:
+				var rain := ColorRect.new()
+				rain.size = Vector2(2, rng.randf_range(8, 16))
+				rain.position = Vector2(rng.randf_range(0, get_viewport_rect().size.x), -20)
+				rain.color = Color(0.2, 1.0, 0.0, 0.4)
+				rain.set_meta("expires", Time.get_ticks_msec() / 1000.0 + 1.5)
+				_weather_layer.add_child(rain)
+			# Animate falling
+			for c in _weather_layer.get_children():
+				if c is ColorRect and c != null and is_instance_valid(c):
+					c.position.y += delta * 300.0
+		"fog":
+			# Pulsing green overlay
+			var existing_fog := _weather_layer.get_node_or_null("FogOverlay")
+			if existing_fog == null:
+				var fog := ColorRect.new()
+				fog.name = "FogOverlay"
+				fog.set_anchors_preset(Control.PRESET_FULL_RECT)
+				fog.color = Color(0.1, 0.3, 0.0, 0.08)
+				fog.z_index = 99
+				fog.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				_weather_layer.add_child(fog)
+		"wind":
+			# Streaking lines across screen
+			if rng.randf() < 0.1:
+				var streak := ColorRect.new()
+				streak.size = Vector2(rng.randf_range(30, 80), 1)
+				streak.position = Vector2(-50, rng.randf_range(0, get_viewport_rect().size.y))
+				streak.color = Color(0.8, 0.9, 1.0, 0.15)
+				streak.set_meta("expires", Time.get_ticks_msec() / 1000.0 + 0.5)
+				_weather_layer.add_child(streak)
+			for c in _weather_layer.get_children():
+				if c is ColorRect and c != null and is_instance_valid(c):
+					c.position.x += delta * 400.0
+		"solar_flare":
+			# Golden flash fading
+			var existing_flare := _weather_layer.get_node_or_null("FlareOverlay")
+			if existing_flare == null:
+				var flare := ColorRect.new()
+				flare.name = "FlareOverlay"
+				flare.set_anchors_preset(Control.PRESET_FULL_RECT)
+				flare.color = Color(1.0, 0.8, 0.1, 0.12)
+				flare.z_index = 99
+				flare.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				_weather_layer.add_child(flare)
+
+
+func _solar_flare_hit() -> void:
+	# One-shot: damage ALL enemies on screen
+	var snap: Array = enemies.duplicate()
+	for e in snap:
+		if e.active:
+			if e.take_hit(5):
+				kill_enemy(e)
+			hud.spawn_float(e.global_position, "FLARE", Color(1.0, 0.9, 0.2))
+	shake(8.0)
+	# Remove flare overlay after 1s
+	get_tree().create_timer(1.0).timeout.connect(func():
+		var fl := _weather_layer.get_node_or_null("FlareOverlay")
+		if fl != null and is_instance_valid(fl):
+			fl.queue_free()
+			_end_weather()
+	)
+
+
+func _spawn_lightning_bolt(at: Vector2) -> void:
+	# Simple lightning bolt visual — vertical line from top
+	var bolt_layer := Node2D.new()
+	bolt_layer.set_meta("expires", Time.get_ticks_msec() / 1000.0 + 0.3)
+	_weather_layer.add_child(bolt_layer)
+	# Draw bolt as line segments
+	var top := Vector2(at.x, -50)
+	var mid1 := at + Vector2(rng.randf_range(-30, 30), -80)
+	var mid2 := at + Vector2(rng.randf_range(-20, 20), -30)
+	var base := at
+	var points_arr: PackedVector2Array = PackedVector2Array([top, mid1, mid2, base])
+	var line := Line2D.new()
+	line.points = points_arr
+	line.width = 3.0
+	line.default_color = Color(0.4, 0.7, 1.0, 0.9)
+	line.z_index = 98
+	bolt_layer.add_child(line)
+	# Glow at impact point
+	var glow := FxRing.new()
+	if glow.get_parent() == null:
+		_weather_layer.add_child(glow)
+	glow.fire(at, 60.0, Color(0.4, 0.7, 1.0, 0.8), 0.3)
+
+
 func _spawn_one(kind) -> void:
 	# Handle funny enemies (string kind)
 	if kind is String:
@@ -952,6 +1202,7 @@ func _process(delta: float) -> void:
 	_bomber_check()
 	_tick_hazards()
 	_tick_miniboss(delta)
+	_tick_weather(delta)
 	_shake = maxf(0.0, _shake - delta * 22.0)
 	world.position = Vector2(rng.randf_range(-_shake, _shake), rng.randf_range(-_shake, _shake))
 	camera.position = player.global_position
