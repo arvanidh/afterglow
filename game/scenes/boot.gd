@@ -96,6 +96,13 @@ func _ready() -> void:
 	missions_btn.add_theme_font_size_override("font_size", 22)
 	missions_btn.pressed.connect(_open_missions)
 	$UI/CenterBox/VBox.add_child(missions_btn)
+	# Settings button
+	var settings_btn := Button.new()
+	settings_btn.text = "SETTINGS"
+	settings_btn.custom_minimum_size = Vector2(200, 50)
+	settings_btn.add_theme_font_size_override("font_size", 22)
+	settings_btn.pressed.connect(_open_settings)
+	$UI/CenterBox/VBox.add_child(settings_btn)
 
 
 func _pulse(item: CanvasItem, period: float) -> void:
@@ -235,6 +242,173 @@ func _select_character(id: String) -> void:
 	if char_label:
 		char_label.text = "Playing as: %s" % String(char_data["name"])
 		char_label.add_theme_color_override("font_color", char_data["color"])
+
+
+func _open_settings() -> void:
+	if _shop_root != null:
+		return
+	_shop_root = CanvasLayer.new()
+	_shop_root.layer = 20
+	add_child(_shop_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.01, 0.03, 0.92)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(dim)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 30
+	scroll.offset_right = -30
+	scroll.offset_top = 40
+	scroll.offset_bottom = -40
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 16)
+	scroll.add_child(content)
+	# Title
+	var t := Label.new()
+	t.text = "SETTINGS"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 30)
+	t.add_theme_color_override("font_color", Color(0.0, 0.94, 1.0))
+	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	t.add_theme_constant_override("shadow_offset_y", 2)
+	content.add_child(t)
+	# Music Volume
+	content.add_child(_make_slider("Music Volume", Settings.music_volume, func(v): Settings.set_music_volume(v)))
+	# SFX Volume
+	content.add_child(_make_slider("SFX Volume", Settings.sfx_volume, func(v): Settings.set_sfx_volume(v)))
+	# Quality
+	var quality_names := ["Low", "Medium", "High"]
+	content.add_child(_make_option("Quality", quality_names, Settings.quality, func(i): Settings.set_quality(i)))
+	# Toggle: Damage Numbers
+	content.add_child(_make_toggle("Show Damage Numbers", Settings.show_damage_numbers, func(): Settings.toggle_damage_numbers()))
+	# Toggle: Screen Shake
+	content.add_child(_make_toggle("Screen Shake", Settings.screen_shake, func(): Settings.toggle_screen_shake()))
+	# Toggle: Auto Level-Up
+	content.add_child(_make_toggle("Auto Level-Up", Settings.auto_level_up, func(): Settings.toggle_auto_level_up()))
+	# Back button
+	var close := Button.new()
+	close.text = "BACK"
+	close.custom_minimum_size = Vector2(0, 55)
+	close.add_theme_font_size_override("font_size", 22)
+	close.pressed.connect(_close_overlay)
+	content.add_child(close)
+
+
+func _make_slider(label_text: String, current: float, callback: Callable) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(0, 70)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.09, 0.18, 0.95)
+	sb.border_color = Color(1, 1, 1, 0.15)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", sb)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	panel.add_child(vbox)
+	var lbl := Label.new()
+	lbl.text = "%s: %d%%" % [label_text, int(current * 100)]
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color.WHITE)
+	vbox.add_child(lbl)
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.05
+	slider.value = current
+	slider.custom_minimum_size = Vector2(0, 30)
+	slider.value_changed.connect(func(v): lbl.text = "%s: %d%%" % [label_text, int(v * 100)]; callback.call(v))
+	vbox.add_child(slider)
+	return panel
+
+
+func _make_option(label_text: String, options: Array, current: int, callback: Callable) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(0, 60)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.09, 0.18, 0.95)
+	sb.border_color = Color(1, 1, 1, 0.15)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", sb)
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 10)
+	panel.add_child(hbox)
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color.WHITE)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(lbl)
+	for i in range(options.size()):
+		var btn := Button.new()
+		btn.text = String(options[i])
+		btn.custom_minimum_size = Vector2(80, 36)
+		btn.add_theme_font_size_override("font_size", 14)
+		btn.button_group = ButtonGroup.new() if i == 0 else hbox.get_child(hbox.get_child_count() - 1).button_group if hbox.get_child_count() > 0 else null
+		if i == 0:
+			var bg := ButtonGroup.new()
+			for child in hbox.get_children():
+				if child is Button:
+					child.button_group = bg
+		if i == current:
+			btn.button_pressed = true
+		var idx := i
+		btn.pressed.connect(func(): callback.call(idx))
+		hbox.add_child(btn)
+	return panel
+
+
+func _make_toggle(label_text: String, current: bool, callback: Callable) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(0, 60)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.09, 0.18, 0.95)
+	sb.border_color = Color(1, 1, 1, 0.15)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", sb)
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 12)
+	panel.add_child(hbox)
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color.WHITE)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(lbl)
+	var btn := Button.new()
+	btn.text = "ON" if current else "OFF"
+	btn.custom_minimum_size = Vector2(70, 40)
+	btn.add_theme_font_size_override("font_size", 16)
+	var status_label := lbl
+	btn.pressed.connect(func():
+		callback.call()
+		btn.text = "ON" if ("ON" != btn.text) else "OFF"
+	)
+	hbox.add_child(btn)
+	return panel
 
 
 func _open_missions() -> void:

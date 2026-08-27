@@ -23,6 +23,7 @@ Audio="*res://autoload/audio.gd"
 DailyChallenge="*res://autoload/daily_challenge.gd"
 Missions="*res://autoload/missions.gd"
 Music="*res://autoload/music.gd"
+Settings="*res://autoload/settings.gd"
 
 [display]
 
