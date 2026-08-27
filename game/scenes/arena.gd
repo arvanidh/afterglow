@@ -63,6 +63,8 @@ var _last_tap_time := 0.0
 const DOUBLE_TAP_CD := 0.35
 var _joy_node: Node2D
 var _shake := 0.0
+var _cam_tilt := 0.0
+var _synergy := "none"
 var _ending := false
 var _results_ready := false
 
@@ -366,6 +368,24 @@ func _level_cleared() -> void:
 	_acquire_pickup().spawn(_random_orb_kind(), player.global_position + Vector2.from_angle(rng.randf() * TAU) * 70.0)
 	RunState.add_gems(2)
 	hud.spawn_float(player.global_position, "+2 GEMS", Color(1.0, 0.72, 0.0))
+	# Special room chance: every 3rd level gives bonus loot
+	if level > 0 and level % 3 == 0:
+		var bonus_text: String
+		var roll := rng.randf()
+		if roll < 0.4:
+			for i in range(3):
+				_acquire_pickup().spawn(Pickup.Kind.CRATE, player.global_position + Vector2.from_angle(randf() * TAU) * (40.0 + float(i) * 30.0))
+			bonus_text = "LOOT ROOM!"
+		elif roll < 0.7:
+			RunState.add_gems(10)
+			hud.spawn_float(player.global_position, "+10 GEMS", Color(1.0, 0.72, 0.0))
+			bonus_text = "GEM BONUS!"
+		else:
+			RunState.hp = player.effective_max_hp()
+			hud.refresh_hp(player.effective_max_hp())
+			bonus_text = "FULL HEAL!"
+		hud.show_announcer(bonus_text, Color(0.0, 1.0, 0.5))
+		shake(5.0)
 	# Give overdrive boost so shooting stays fast after level clear
 	apply_overdrive(4.0)
 	# Reset weapon cooldown so first shot fires instantly in new level
@@ -738,6 +758,33 @@ func _equip_weapon(id: String, first := false) -> void:
 	if "_cd" in weapon:
 		weapon._cd = 0.0
 	hud.set_gun(weapon.DISPLAY_NAME, weapon.level)
+	_check_synergy()
+
+
+func _check_synergy() -> void:
+	# Track highest-level owned weapon — synergy unlocks at level 3+
+	var best_id := current_gun_id()
+	var best_lv := 1
+	for id in owned_guns:
+		if gun_lv.get(id, 1) > best_lv:
+			best_lv = gun_lv.get(id, 1)
+			best_id = id
+	if best_lv < 3:
+		_synergy = "none"
+		return
+	match best_id:
+		"frost":
+			_synergy = "frost_slow"  # Nearby enemies slow down
+		"flame":
+			_synergy = "flame_aura"  # Burns nearby enemies per second
+		"lightning":
+			_synergy = "chain_light"  # Hits chain to 1 nearby enemy
+		"orbit":
+			_synergy = "orbit_sparks"  # Blades leave trail damage
+		"nova":
+			_synergy = "nova_shield"  # Explosions heal 1 HP each
+		_:
+			_synergy = "none"
 
 
 func swap_weapon_random() -> void:
@@ -834,10 +881,15 @@ func _apply_card(card: Dictionary) -> void:
 	var target := String(card["target"])
 	match kind:
 		"weapon_up":
-			gun_lv[target] = mini(int(gun_lv.get(target, 1)) + 1, CardDb.WEAPON_MAX_LV)
+			var old_lv: int = int(gun_lv.get(target, 1))
+			gun_lv[target] = mini(old_lv + 1, CardDb.WEAPON_MAX_LV)
 			if current_gun_id() == target and weapon != null:
 				weapon.level_up()
 				hud.set_gun(String(WEAPON_CLASSES[target].DISPLAY_NAME), weapon.level)
+			if old_lv < 3 and gun_lv[target] >= 3:
+				_check_synergy()
+				hud.show_announcer("SYNERGY UNLOCKED!", Color(0.0, 1.0, 0.8), 1.2)
+				shake(6.0)
 		"weapon_new":
 			if not owned_guns.has(target):
 				owned_guns.append(target)
@@ -916,6 +968,14 @@ func _process(delta: float) -> void:
 		if f.active and is_instance_valid(f):
 			f._dir = (player.global_position - f.global_position).normalized()
 	hud.fade_vignette(delta)
+	_tick_synergy(delta)
+	# Camera tilt on dash recovery
+	_cam_tilt = move_toward(_cam_tilt, 0.0, delta * 12.0)
+	if player != null and player.dashing:
+		var dash_tilt := player.move_dir.x * 3.0 if player.move_dir.length_squared() > 0.01 else 3.0
+		_cam_tilt = move_toward(_cam_tilt, dash_tilt, delta * 18.0)
+	if camera != null:
+		camera.rotation_degrees = _cam_tilt
 	var dfrac := -1.0 if player.dash_cd <= 0.0 else player.dash_cd / (PlayerSpark.DASH_BASE_CD * float(player.mods["dash_cd_mult"]))
 	hud.tick_dash(dfrac)
 
@@ -1006,6 +1066,22 @@ func _bolts_vs_enemies() -> void:
 					hud.spawn_float(e.global_position, str(b.damage), Color(0.85, 0.95, 1.0))
 				if e.take_hit(b.damage):
 					kill_enemy(e)
+					# Chain lightning synergy: hit one more nearby enemy
+					if _synergy == "chain_light":
+						var best_dist := 999999.0
+						var best_e: ShadowEnemy = null
+						var snap2: Array = enemies.duplicate()
+						for e2 in snap2:
+							if e2.active and e2 != e:
+								var d: float = e.global_position.distance_to(e2.global_position)
+								if d < 180.0 and d < best_dist:
+									best_dist = d
+									best_e = e2
+						if best_e != null:
+							if best_e.take_hit(2):
+								kill_enemy(best_e)
+							hud.spawn_float(best_e.global_position, "CHAIN", Color(0.0, 0.6, 1.0))
+						spawn_ring(best_e.global_position, 40.0, Color(0.0, 0.6, 1.0, 0.7))
 				break
 		# Check funny enemies
 		for f in funny_enemies:
@@ -1106,28 +1182,45 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	Missions.track_kill()
 	if streak >= 3:
 		hud.combo_pop(streak)
-		# Funny combo sounds + announcer
+		# Funny combo sounds + announcer + JUICE
 		if streak == 3:
 			Audio.play("combo3", -5.0)
 			hud.show_announcer("TRIPLE KILL", Color(1.0, 0.94, 0.0))
+			shake(3.0)
 		elif streak == 5:
 			Audio.play("combo5", -4.0)
 			hud.show_announcer("MEGA KILL", Color(1.0, 0.45, 0.2))
+			shake(6.0)
+			Engine.time_scale = 0.4
+			get_tree().create_timer(0.2, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+			# Kill explosion: damage nearby enemies
+			_streak_explosion(e.global_position, 120.0, 1)
 		elif streak == 10:
 			Audio.play("combo10", -3.0)
 			hud.show_announcer("ULTRA KILL", Color(1.0, 0.2, 0.2))
-			shake(5.0)
+			shake(8.0)
+			Engine.time_scale = 0.3
+			get_tree().create_timer(0.25, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+			_streak_explosion(e.global_position, 180.0, 2)
 		elif streak == 20:
 			Audio.play("combo10", -2.0)
 			hud.show_announcer("HYPER KILL", Color(1.0, 0.0, 0.6))
-			shake(8.0)
+			shake(10.0)
+			Engine.time_scale = 0.2
+			get_tree().create_timer(0.3, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+			_streak_explosion(e.global_position, 250.0, 3)
 		elif streak == 30:
 			Audio.play("combo10", -1.0)
 			hud.show_announcer("UNSTOPPABLE", Color(0.0, 1.0, 1.0))
-			shake(10.0)
+			shake(12.0)
+			Engine.time_scale = 0.15
+			get_tree().create_timer(0.4, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+			_streak_explosion(e.global_position, 350.0, 5)
 		elif streak % 10 == 0:
 			Audio.play("combo10", -2.0)
 			hud.show_announcer("GODLIKE", Color(1.0, 0.84, 0.0))
+			shake(8.0)
+			_streak_explosion(e.global_position, 200.0, 3)
 	Missions.track_combo(streak)
 	if streak > 0 and streak % 5 == 0:
 		for i in range(mini(1 + streak / 10, 3)):
@@ -1179,6 +1272,27 @@ func kill_enemy(e: ShadowEnemy) -> void:
 		hud.set_level(level, remaining_count())
 
 
+func _streak_explosion(at: Vector2, radius: float, dmg: int) -> void:
+	# Area damage + visual explosion on streak milestones
+	_spawn_death_shockwave(at, Color(1.0, 0.72, 0.0, 0.9), radius)
+	_burst(at, Color(1.0, 0.72, 0.0))
+	# Giant floating text
+	var labels: Array[String] = ["BOOM!", "KABOOM!", "ANNIHILATE!", "OBLITERATE!"]
+	hud.spawn_float(at, labels[rng.randi_range(0, labels.size() - 1)], Color(1.0, 0.94, 0.0))
+	# Damage all enemies in radius
+	var snapshot: Array = enemies.duplicate()
+	for e in snapshot:
+		if not e.active:
+			continue
+		var dist: float = at.distance_to(e.global_position)
+		if dist < radius:
+			if e.take_hit(dmg):
+				kill_enemy(e)
+	# Drop bonus gems
+	for i in range(3):
+		_acquire_mote().drop(at + Vector2.from_angle(randf() * TAU) * 30.0, 2)
+
+
 func _random_orb_kind() -> Pickup.Kind:
 	var roll := rng.randf()
 	if roll < 0.30:
@@ -1190,6 +1304,49 @@ func _random_orb_kind() -> Pickup.Kind:
 	else:
 		return Pickup.Kind.SPEED
 
+
+var _synergy_cd := 0.0
+func _tick_synergy(delta: float) -> void:
+	if _synergy == "none" or player == null or not is_instance_valid(player):
+		return
+	_synergy_cd -= delta
+	if _synergy_cd > 0.0:
+		return
+	match _synergy:
+		"frost_slow":
+			# Slow all enemies within 200px for 1.5s
+			_synergy_cd = 1.5
+			var snap: Array = enemies.duplicate()
+			for e in snap:
+				if e.active and e.global_position.distance_to(player.global_position) < 200.0:
+					e.speed *= 0.5
+					e.get_tree().create_timer(1.5).timeout.connect(func(): e.speed *= 2.0 if is_instance_valid(e) else 0.0)
+		"flame_aura":
+			# Burn nearby enemies for 1 damage
+			_synergy_cd = 0.8
+			var snap: Array = enemies.duplicate()
+			for e in snap:
+				if e.active and e.global_position.distance_to(player.global_position) < 120.0:
+					if e.take_hit(1):
+						kill_enemy(e)
+					hud.spawn_float(e.global_position, "BURN", Color(1.0, 0.4, 0.0))
+		"chain_light":
+			_synergy_cd = 0.0  # triggered per bolt hit instead (see _bolts_vs_enemies)
+		"orbit_sparks":
+			_synergy_cd = 0.5
+			# Orbit blade trail damage
+			if weapon != null and "orbit_angle" in weapon:
+				var snap: Array = enemies.duplicate()
+				var blade_pos: Vector2 = weapon.global_position
+				for e in snap:
+					if e.active and e.global_position.distance_to(blade_pos) < 30.0:
+						if e.take_hit(1):
+							kill_enemy(e)
+		"nova_shield":
+			_synergy_cd = 2.0
+			if player.hp < player.max_hp:
+				player.heal(1)
+				hud.spawn_float(player.global_position, "+1 HP", Color(0.0, 1.0, 0.4))
 
 func acquire_bolt() -> PulseBolt:
 	for b in bolts:
