@@ -133,15 +133,25 @@ func _set_biome(level_num: int) -> void:
 		biome_id = "sky"
 	grid.set_biome(biome_id)
 	Music.play_biome(biome_id)
-	# Change background color based on biome
+	# Apply biome background tint
 	var bg_colors := {
 		"promenade": Color(0.02, 0.02, 0.04),
 		"sewers": Color(0.01, 0.03, 0.01),
 		"sky": Color(0.02, 0.01, 0.04),
 	}
-	var viewport_bg := get_viewport()
-	if viewport_bg:
-		viewport_bg.get_camera_2d()  # ensure camera exists
+	var new_bg: Color = bg_colors.get(biome_id, Color(0.02, 0.02, 0.04))
+	# Create or update background
+	var bg := get_node_or_null("BG")
+	if bg == null:
+		bg = ColorRect.new()
+		bg.name = "BG"
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.z_index = -10
+		add_child(bg)
+	# Animate background color transition
+	var tween := create_tween()
+	tween.tween_property(bg, "color", new_bg, 1.0)
 
 
 func _apply_permanent_upgrades() -> void:
@@ -279,7 +289,24 @@ func _level_cleared() -> void:
 	Audio.play("level_clear", -2.0)
 	shake(4.0)
 	hud.flash_level_up()
-	hud.show_announcer("LEVEL CLEAR", Color(1.0, 0.72, 0.0))
+	# Biome transition: fade effect when crossing boundaries
+	if level == 10 or level == 20:
+		var fade := ColorRect.new()
+		fade.color = Color(0, 0, 0, 0)
+		fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+		fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var fade_layer := CanvasLayer.new()
+		fade_layer.layer = 50
+		fade_layer.add_child(fade)
+		add_child(fade_layer)
+		var tw := create_tween()
+		tw.tween_property(fade, "color:a", 1.0, 0.5)
+		tw.tween_interval(0.3)
+		tw.tween_property(fade, "color:a", 0.0, 0.5)
+		tw.tween_callback(fade_layer.queue_free)
+		hud.show_banner("ENTERING %s" % ("NEON SEWERS" if level == 10 else "SKY RUINS"), Color(0.8, 0.4, 1.0), 2.0)
+	else:
+		hud.show_announcer("LEVEL CLEAR", Color(1.0, 0.72, 0.0))
 	hud.show_banner("LEVEL %d CLEAR  ·  +1 HP" % level, Color(1.0, 0.72, 0.0), 1.5)
 	Missions.track_level(level)
 	# Bonus gem drop on level clear
@@ -332,8 +359,13 @@ func _spawn_boss(level_num: int) -> void:
 	hud.show_banner("BOSS: %s" % Boss.STATS[boss_kind]["name"], Color(1.0, 0.2, 0.1), 2.0)
 	hud.show_boss_bar(Boss.STATS[boss_kind]["name"])
 	Music.play_boss()
-	# Camera shake for dramatic entrance
+	# Boss intro: dramatic zoom + shake
 	shake(8.0)
+	var orig_zoom := camera.zoom
+	var tween := create_tween()
+	tween.tween_property(camera, "zoom", Vector2(1.3, 1.3), 0.3)
+	tween.tween_interval(0.8)
+	tween.tween_property(camera, "zoom", orig_zoom, 0.5)
 
 
 func _on_boss_died(boss: Boss) -> void:
