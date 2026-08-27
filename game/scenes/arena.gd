@@ -11,7 +11,7 @@ const JOY_RADIUS := 70.0
 const BETWEEN_LEVELS := 2.4
 const COMBO_WINDOW := 3.2
 
-var WEAPON_CLASSES := {"pulse": PulseWeapon, "orbit": OrbitBlades, "nova": NovaBurst, "lightning": LightningChain, "frost": FrostNova, "flame": FlameTrail, "plasma_storm": PlasmaStorm, "thunder_cannon": ThunderCannon, "solar_flare": SolarFlare}
+var WEAPON_CLASSES := {"pulse": PulseWeapon, "orbit": OrbitBlades, "nova": NovaBurst, "lightning": LightningChain, "frost": FrostNova, "flame": FlameTrail, "plasma_storm": PlasmaStorm, "thunder_cannon": ThunderCannon, "solar_flare": SolarFlare, "steam_cloud": SteamCloud, "tesla_field": TeslaField, "impulse_wave": ImpulseWave}
 
 var world: Node2D
 var grid: GridLayer

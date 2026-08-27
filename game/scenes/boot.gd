@@ -84,6 +84,13 @@ func _ready() -> void:
 	boss_rush_btn.add_theme_font_size_override("font_size", 22)
 	boss_rush_btn.pressed.connect(_start_boss_rush)
 	$UI/CenterBox/VBox.add_child(boss_rush_btn)
+	# Craft Weapon button
+	var craft_btn := Button.new()
+	craft_btn.text = "CRAFT WEAPON"
+	craft_btn.custom_minimum_size = Vector2(200, 50)
+	craft_btn.add_theme_font_size_override("font_size", 22)
+	craft_btn.pressed.connect(_open_craft)
+	$UI/CenterBox/VBox.add_child(craft_btn)
 	var shop_btn := Button.new()
 	shop_btn.text = "SHOP"
 	shop_btn.custom_minimum_size = Vector2(200, 50)
@@ -866,6 +873,150 @@ func _confirm_reset() -> void:
 		get_tree().reload_current_scene()
 	)
 	btn_box.add_child(do_reset)
+
+
+func _open_craft() -> void:
+	if _shop_root != null:
+		return
+	var save := SaveSystem.load_save()
+	var owned: Array = save.get("unlocked_weapons", ["pulse"])
+	var crafts: Array = CardDb.get_available_crafts(owned)
+	# Add already-crafted hybrids to owned for display
+	var crafted: Array = save.get("crafted_weapons", [])
+	for cw in crafted:
+		if not owned.has(cw):
+			owned.append(cw)
+	_shop_root = CanvasLayer.new()
+	_shop_root.layer = 20
+	add_child(_shop_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.01, 0.03, 0.92)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(dim)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 20
+	scroll.offset_right = -20
+	scroll.offset_top = 40
+	scroll.offset_bottom = -40
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 8)
+	scroll.add_child(content)
+	var title := Label.new()
+	title.text = "WEAPON CRAFTING"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(1.0, 0.72, 0.0))
+	content.add_child(title)
+	var sub := Label.new()
+	sub.text = "Combine 2 weapons to create a unique hybrid"
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", 14)
+	sub.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+	content.add_child(sub)
+	# Show available crafts
+	if crafts.is_empty():
+		var empty := Label.new()
+		empty.text = "No recipes available yet.\nOwn 2 base weapons to unlock crafting."
+		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty.add_theme_font_size_override("font_size", 18)
+		empty.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
+		content.add_child(empty)
+	else:
+		for recipe: Dictionary in crafts:
+			var panel := PanelContainer.new()
+			panel.custom_minimum_size = Vector2(0, 80)
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.06, 0.08, 0.16, 0.95)
+			sb.border_color = recipe["color"]
+			sb.set_border_width_all(2)
+			sb.set_corner_radius_all(12)
+			sb.content_margin_left = 16
+			sb.content_margin_right = 16
+			sb.content_margin_top = 10
+			sb.content_margin_bottom = 10
+			panel.add_theme_stylebox_override("panel", sb)
+			var hbox := HBoxContainer.new()
+			hbox.add_theme_constant_override("separation", 12)
+			panel.add_child(hbox)
+			var info := VBoxContainer.new()
+			info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			hbox.add_child(info)
+			var rname := Label.new()
+			rname.text = recipe["title"]
+			rname.add_theme_font_size_override("font_size", 20)
+			rname.add_theme_color_override("font_color", recipe["color"])
+			info.add_child(rname)
+			var rdesc := Label.new()
+			rdesc.text = recipe["desc"]
+			rdesc.add_theme_font_size_override("font_size", 13)
+			rdesc.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+			info.add_child(rdesc)
+			var rparents := Label.new()
+			rparents.text = "%s + %s" % [String(recipe["parents"][0]).to_upper(), String(recipe["parents"][1]).to_upper()]
+			rparents.add_theme_font_size_override("font_size", 12)
+			rparents.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
+			info.add_child(rparents)
+			# Craft button
+			var btn := Button.new()
+			btn.text = "CRAFT"
+			btn.custom_minimum_size = Vector2(90, 50)
+			btn.add_theme_font_size_override("font_size", 18)
+			var hybrid_id: String = recipe["id"]
+			var parent_a: String = recipe["parents"][0]
+			var parent_b: String = recipe["parents"][1]
+			var hybrid_color: Color = recipe["color"]
+			if crafted.has(hybrid_id):
+				btn.text = "CRAFTED ✓"
+				btn.disabled = true
+			else:
+				btn.pressed.connect(_do_craft.bind(hybrid_id, parent_a, parent_b, hybrid_color))
+			hbox.add_child(btn)
+			content.add_child(panel)
+	# Show already-crafted hybrids
+	if not crafted.is_empty():
+		var hdr := Label.new()
+		hdr.text = "CRAFTED HYBRIDS"
+		hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hdr.add_theme_font_size_override("font_size", 18)
+		hdr.add_theme_color_override("font_color", Color(0.0, 1.0, 0.5))
+		content.add_child(hdr)
+		for cid: String in crafted:
+			var recipe: Dictionary = CardDb.HYBRID_RECIPES.get(cid, {})
+			if recipe.is_empty():
+				continue
+			var lbl := Label.new()
+			lbl.text = "✓ %s (%s + %s)" % [recipe["title"], recipe["parents"][0], recipe["parents"][1]]
+			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lbl.add_theme_font_size_override("font_size", 16)
+			lbl.add_theme_color_override("font_color", recipe["color"])
+			content.add_child(lbl)
+	var close := Button.new()
+	close.text = "BACK"
+	close.custom_minimum_size = Vector2(0, 55)
+	close.add_theme_font_size_override("font_size", 22)
+	close.pressed.connect(_close_overlay)
+	content.add_child(close)
+
+
+func _do_craft(hybrid_id: String, parent_a: String, parent_b: String, col: Color) -> void:
+	var save := SaveSystem.load_save()
+	var crafted: Array = save.get("crafted_weapons", [])
+	if crafted.has(hybrid_id):
+		return
+	# Add hybrid to crafted list
+	crafted.append(hybrid_id)
+	# Also unlock it as a usable weapon
+	SaveSystem.unlock_weapon(hybrid_id)
+	save["crafted_weapons"] = crafted
+	SaveSystem.save(save)
+	# Refresh the crafting screen
+	_close_overlay()
+	_open_craft()
 
 
 func _close_overlay() -> void:

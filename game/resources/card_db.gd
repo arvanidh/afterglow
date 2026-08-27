@@ -50,6 +50,23 @@ const WEAPON_NEW_DEFS := {
 	"flame": {"title": "FLAME TRAIL", "desc": "leave burning ground while you move", "rarity": Rarity.UNCOMMON},
 }
 
+# Hybrid weapon crafting recipes: two parent weapons → one hybrid
+const HYBRID_RECIPES := {
+	"steam_cloud": {"parents": ["frost", "flame"], "title": "STEAM CLOUD", "desc": "Frost + Flame = lingering cloud that SLOWS + BURNS", "color": Color(0.7, 1.0, 0.8)},
+	"tesla_field": {"parents": ["lightning", "orbit"], "title": "TESLA FIELD", "desc": "Lightning + Orbit = orbiting bolts that CHAIN", "color": Color(0.4, 0.7, 1.0)},
+	"impulse_wave": {"parents": ["pulse", "nova"], "title": "IMPULSE WAVE", "desc": "Pulse + Nova = piercing wave hits ALL enemies", "color": Color(1.0, 0.8, 0.2)},
+}
+
+static func get_available_crafts(owned_guns: Array) -> Array:
+	# Returns list of hybrid recipes that can be crafted with current weapons
+	var crafts: Array = []
+	for hybrid_id: String in HYBRID_RECIPES:
+		var recipe: Dictionary = HYBRID_RECIPES[hybrid_id]
+		var parents: Array = recipe["parents"]
+		if owned_guns.has(parents[0]) and owned_guns.has(parents[1]):
+			crafts.append({"id": hybrid_id, "title": recipe["title"], "desc": recipe["desc"], "color": recipe["color"], "parents": parents})
+	return crafts
+
 
 ## Builds three distinct draft choices from what the run owns so far.
 ## owned_guns: Array[String] e.g. ["pulse"]; gun_lv: Dictionary id->int;
