@@ -22,6 +22,7 @@ AdsManager="*res://autoload/ads_manager.gd"
 Audio="*res://autoload/audio.gd"
 DailyChallenge="*res://autoload/daily_challenge.gd"
 Missions="*res://autoload/missions.gd"
+Music="*res://autoload/music.gd"
 
 [display]
 
@@ -30,6 +31,7 @@ window/size/viewport_height=1280
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
+audio/default_bus_layout="res://default_bus_layout.tres"
 
 [input_devices]
 

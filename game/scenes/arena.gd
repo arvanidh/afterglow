@@ -132,6 +132,7 @@ func _set_biome(level_num: int) -> void:
 	elif level_num > 20:
 		biome_id = "sky"
 	grid.set_biome(biome_id)
+	Music.play_biome(biome_id)
 	# Change background color based on biome
 	var bg_colors := {
 		"promenade": Color(0.02, 0.02, 0.04),
@@ -330,6 +331,7 @@ func _spawn_boss(level_num: int) -> void:
 	hud.show_announcer(Boss.STATS[boss_kind]["name"], Color(1.0, 0.2, 0.1))
 	hud.show_banner("BOSS: %s" % Boss.STATS[boss_kind]["name"], Color(1.0, 0.2, 0.1), 2.0)
 	hud.show_boss_bar(Boss.STATS[boss_kind]["name"])
+	Music.play_boss()
 	# Camera shake for dramatic entrance
 	shake(8.0)
 
@@ -625,6 +627,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			player.move_dir = Vector2.ZERO
 		_joy_node.queue_redraw()
 	elif _ending and _results_ready and event is InputEventScreenTouch and event.pressed:
+		Music.stop()
 		get_tree().change_scene_to_file("res://scenes/boot.tscn")
 
 
