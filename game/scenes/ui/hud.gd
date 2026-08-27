@@ -311,8 +311,21 @@ func _make_pause_btn(text: String, col: Color, y_off: float) -> ColorRect:
 	return container
 
 func combo_pop(streak: int) -> void:
+	# Scale text size with combo: bigger combos = bigger text
+	var base_size := 22
+	var size_boost := mini(streak / 5, 6)
+	combo_label.add_theme_font_size_override("font_size", base_size + size_boost * 3)
 	combo_label.text = "×%d COMBO" % streak
-	combo_label.scale = Vector2(1.5, 1.5)
+	# Color shifts from amber to magenta to cyan at high combos
+	if streak >= 30:
+		combo_label.add_theme_color_override("font_color", Color(0.0, 1.0, 1.0))
+	elif streak >= 20:
+		combo_label.add_theme_color_override("font_color", Color(1.0, 0.0, 0.6))
+	elif streak >= 10:
+		combo_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.1))
+	else:
+		combo_label.add_theme_color_override("font_color", AMBER)
+	combo_label.scale = Vector2(1.6, 1.6)
 	var tw := create_tween()
 	tw.tween_property(combo_label, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK)
 

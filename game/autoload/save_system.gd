@@ -177,3 +177,26 @@ func get_level_stars() -> Dictionary:
 	if raw is Dictionary:
 		return raw
 	return {}
+
+
+# --- Infinite mode leaderboard ---
+func save_infinite_score(level: int, kills: int, time: float) -> void:
+	var data := load_save()
+	var board: Array = data.get("infinite_board", [])
+	board.append({"level": level, "kills": kills, "time": snappedf(time, 0.1), "date": Time.get_datetime_string_from_system()})
+	board.sort_custom(func(a, b): return a["level"] > b["level"] or (a["level"] == b["level"] and a["kills"] > b["kills"]))
+	if board.size() > 10:
+		board.resize(10)
+	data["infinite_board"] = board
+	data["best_infinite_level"] = maxi(int(data.get("best_infinite_level", 0)), level)
+	save(data)
+
+
+func get_infinite_board() -> Array:
+	var data := load_save()
+	return data.get("infinite_board", [])
+
+
+func get_best_infinite_level() -> int:
+	var data := load_save()
+	return int(data.get("best_infinite_level", 0))
