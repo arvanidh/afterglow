@@ -55,8 +55,7 @@ func _process(delta: float) -> void:
 			has_target = true
 	if not has_target:
 		var target: ShadowEnemy = arena.nearest_enemy(global_position, RANGE)
-		if target == null:
-			return
+		if target != null:
 			target_pos = target.global_position
 			has_target = true
 	if not has_target:
