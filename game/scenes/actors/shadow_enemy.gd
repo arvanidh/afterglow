@@ -7,7 +7,7 @@ extends Node2D
 
 signal spit_requested(from_pos: Vector2, target_pos: Vector2)
 
-enum Kind { SHADE, SWARMLET, SPITTER, BRUTE }
+enum Kind { SHADE, SWARMLET, SPITTER, BRUTE, PHANTOM, BOMBER }
 
 const STATS := {
 	Kind.SHADE: {
@@ -30,10 +30,21 @@ const STATS := {
 		"body": Color("131629"), "rim": Color("20263f"), "eye": Color(1.0, 0.30, 0.10), "gems": 5,
 		"mass": 0.75,
 	},
+	Kind.PHANTOM: {
+		"hp": 2, "speed": 110.0, "speed_jitter": 30.0, "radius": 12.0, "damage": 1,
+		"body": Color("0d1a2e"), "rim": Color("1a2d55"), "eye": Color(0.4, 0.9, 1.0), "gems": 3,
+		"mass": 0.08,
+	},
+	Kind.BOMBER: {
+		"hp": 5, "speed": 55.0, "speed_jitter": 10.0, "radius": 18.0, "damage": 1,
+		"body": Color("2e1a0d"), "rim": Color("4a2a10"), "eye": Color(1.0, 0.55, 0.0), "gems": 4,
+		"mass": 0.30,
+	},
 }
 
 const KIND_NAMES := {
 	Kind.SHADE: "shade", Kind.SWARMLET: "swarmlet", Kind.SPITTER: "spitter", Kind.BRUTE: "brute",
+	Kind.PHANTOM: "phantom", Kind.BOMBER: "bomber",
 }
 
 var kind := Kind.SHADE
@@ -53,6 +64,8 @@ var _strafe_phase := 0.0
 # spitter state
 var _fire_cd := 2.0
 var _windup := -1.0
+var _teleport_cd := 3.0
+var _bomb_warning := 0.0
 
 
 func setup(new_kind: Kind, player: Node2D, rng: RandomNumberGenerator, as_elite := false) -> void:
@@ -105,6 +118,10 @@ func _process(delta: float) -> void:
 	match kind:
 		Kind.SPITTER:
 			_process_spitter(delta, dist)
+		Kind.PHANTOM:
+			_process_phantom(delta, dist)
+		Kind.BOMBER:
+			_process_bomber(delta, dist)
 		_:
 			global_position += _dir * speed * delta
 	queue_redraw()
@@ -134,6 +151,35 @@ func _process_spitter(delta: float, dist: float) -> void:
 		global_position += side * sin(_strafe_phase) * speed * 0.65 * delta
 
 
+func _process_phantom(delta: float, dist: float) -> void:
+	# Phantom moves toward player, then teleports close every 3s
+	_teleport_cd -= delta
+	if _teleport_cd <= 0.0 and dist > 80.0:
+		# Teleport near the player at a random angle
+		var angle := randf() * TAU
+		var offset := Vector2.from_angle(angle) * randf_range(60.0, 120.0)
+		global_position = _player.global_position + offset
+		_teleport_cd = randf_range(2.5, 4.0)
+		# Visual flash on teleport
+		_flash = 0.3
+	else:
+		global_position += _dir * speed * delta
+
+
+func _process_bomber(delta: float, dist: float) -> void:
+	# Bomber walks toward player and explodes when close
+	global_position += _dir * speed * delta
+	if dist < 120.0:
+		_bomb_warning += delta
+	else:
+		_bomb_warning = maxf(0.0, _bomb_warning - delta * 0.5)
+	# Return true when about to explode so arena can handle it
+
+
+func should_explode() -> bool:
+	return kind == Kind.BOMBER and _bomb_warning >= 0.8
+
+
 func shove_multiplier_mass() -> float:
 	return mass
 
@@ -153,6 +199,15 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, radius + 13.0, 0.0, TAU, 40, Color(1.0, 0.35, 0.75, pulse * 0.4), 1.2)
 	draw_circle(Vector2.ZERO, radius + 5.0, Color(rim.r, rim.g, rim.b, 0.25))
 	draw_circle(Vector2.ZERO, radius, body)
+	# Bomber warning pulse
+	if kind == Kind.BOMBER and _bomb_warning > 0.0:
+		var pulse := _bomb_warning / 0.8
+		var col := Color(1.0, 0.3, 0.0, pulse * 0.5)
+		draw_arc(Vector2.ZERO, radius + 8.0 * pulse, 0.0, TAU, 30, col, 2.5 * pulse)
+	# Phantom shimmer
+	if kind == Kind.PHANTOM:
+		var shimmer := 0.15 + 0.1 * sin(Time.get_ticks_msec() * 0.008)
+		draw_circle(Vector2.ZERO, radius + 3.0, Color(0.4, 0.9, 1.0, shimmer))
 	# windup telegraph — the spitter swells before it lobs
 	if _windup >= 0.0:
 		var swell := 1.0 + 0.22 * (1.0 - _windup / 0.36)

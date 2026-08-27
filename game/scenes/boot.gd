@@ -36,6 +36,12 @@ func _ready() -> void:
 	controls.add_theme_font_size_override("font_size", 14)
 	controls.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
 	$UI/CenterBox/VBox.add_child(controls)
+	var level_map_btn := Button.new()
+	level_map_btn.text = "LEVEL MAP"
+	level_map_btn.custom_minimum_size = Vector2(200, 50)
+	level_map_btn.add_theme_font_size_override("font_size", 22)
+	level_map_btn.pressed.connect(_open_level_map)
+	$UI/CenterBox/VBox.add_child(level_map_btn)
 	var shop_btn := Button.new()
 	shop_btn.text = "SHOP"
 	shop_btn.custom_minimum_size = Vector2(200, 50)
@@ -294,6 +300,123 @@ func _close_overlay() -> void:
 	if _shop_root != null:
 		_shop_root.queue_free()
 		_shop_root = null
+
+
+func _open_level_map() -> void:
+	if _shop_root != null:
+		return
+	var save := SaveSystem.load_save()
+	var highest := int(save.get("highest_unlocked", 1))
+	var stars: Dictionary = save.get("level_stars", {})
+	const TOTAL_LEVELS := 30
+
+	_shop_root = CanvasLayer.new()
+	_shop_root.layer = 20
+	add_child(_shop_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.01, 0.03, 0.92)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(dim)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 20
+	scroll.offset_right = -20
+	scroll.offset_top = 40
+	scroll.offset_bottom = -40
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 8)
+	scroll.add_child(content)
+	var title := Label.new()
+	title.text = "LEVEL MAP"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(0.0, 0.94, 1.0))
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	title.add_theme_constant_override("shadow_offset_y", 2)
+	content.add_child(title)
+	var progress := Label.new()
+	progress.text = "%d / %d levels unlocked" % [mini(highest, TOTAL_LEVELS), TOTAL_LEVELS]
+	progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	progress.add_theme_font_size_override("font_size", 16)
+	progress.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+	content.add_child(progress)
+	# Build level grid: 3 columns
+	var row_hbox: HBoxContainer = null
+	for i in range(TOTAL_LEVELS):
+		if i % 3 == 0:
+			row_hbox = HBoxContainer.new()
+			row_hbox.add_theme_constant_override("separation", 10)
+			row_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+			content.add_child(row_hbox)
+		var lv := i + 1
+		var unlocked := lv <= highest
+		var star_count := int(stars.get(str(lv), 0))
+		var node := _make_level_node(lv, unlocked, star_count)
+		row_hbox.add_child(node)
+	var close := Button.new()
+	close.text = "BACK"
+	close.custom_minimum_size = Vector2(0, 55)
+	close.add_theme_font_size_override("font_size", 22)
+	close.pressed.connect(_close_overlay)
+	content.add_child(close)
+
+
+func _make_level_node(lv: int, unlocked: bool, star_count: int) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(100, 90)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := StyleBoxFlat.new()
+	if unlocked:
+		sb.bg_color = Color(0.08, 0.12, 0.22, 0.95)
+		sb.border_color = Color(0.0, 0.94, 1.0, 0.6) if star_count > 0 else Color(1, 1, 1, 0.2)
+	else:
+		sb.bg_color = Color(0.04, 0.04, 0.08, 0.8)
+		sb.border_color = Color(1, 1, 1, 0.08)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(12)
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", sb)
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(vbox)
+	var num := Label.new()
+	num.text = str(lv)
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	num.add_theme_font_size_override("font_size", 24)
+	num.add_theme_color_override("font_color", Color.WHITE if unlocked else Color(1, 1, 1, 0.2))
+	vbox.add_child(num)
+	var stars_text := ""
+	if unlocked:
+		for s in range(3):
+			stars_text += "★" if s < star_count else "☆"
+	else:
+		stars_text = "🔒"
+	var star_label := Label.new()
+	star_label.text = stars_text
+	star_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	star_label.add_theme_font_size_override("font_size", 14)
+	star_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.0) if star_count > 0 else Color(1, 1, 1, 0.3))
+	vbox.add_child(star_label)
+	if unlocked:
+		panel.gui_input.connect(_on_level_tap.bind(lv))
+	return panel
+
+
+func _on_level_tap(event: InputEvent, lv: int) -> void:
+	if event is InputEventScreenTouch and event.pressed:
+		_close_overlay()
+		_start_level(lv)
+
+
+func _start_level(lv: int) -> void:
+	RunState.reset_run(lv)
+	GameState.change_state(GameState.State.RUN)
+	get_tree().change_scene_to_file("res://scenes/arena.tscn")
 
 
 func _spawn_spark(at: Vector2) -> void:

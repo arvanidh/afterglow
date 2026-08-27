@@ -606,6 +606,46 @@ func _draw_radar() -> void:
 # ---------------------------------------------------------------- results
 
 func build_results(survived: float, seed_hex: String, level_reached: int) -> Control:
+	# Funny death messages — pick one randomly
+	var death_msgs := [
+		"THE LIGHT WENT OUT",
+		"SCREENED BY A SHADOW",
+		"THE DARKNESS WINS... AGAIN",
+		"RAN OUT OF SPARKS",
+		"OOPS, ALL SHADOWS",
+		"THE CITY STAYS BLACK",
+		"SHADOW 1, LIGHT 0",
+		"YOUR SPARK GOT SNuffed",
+		"TOO MANY SHADOWS, NOT ENOUGH GLOW",
+		"THE DARKNESS SENDS ITS REGARDS",
+		"YOU DIED DOING WHAT YOU LOVED: SHOOTING",
+		"THE SHADOWS SEND THEIR THOUGHTS AND PRAYERS",
+		"A SHADOW WROTE YOUR NAME IN THE DARK",
+		"YOUR LIGHT BILL IS DUE",
+		"THE DARKNESS SUBSCRIBED TO YOUR CHANNEL",
+		"THE SHADOWS APPRECIATE YOUR CONTRIBUTION",
+		"THE DARKNESS TYPED 'GG' IN CHAT",
+		"YOUR SPARK JUST UNPLUGGED ITSELF",
+		"THE SHADOWS THOUGHT YOU WERE THE BOSS",
+		"YOUR LIGHT JUST RAN OUT OF BATTERY",
+		"THE DARKNESS POSTED YOUR L ON TWITTER",
+		"YOUR SPARK IS NOW A GHOST LIGHT",
+		"THE SHADOWS JUST HIT YOU WITH THE WET FLOOR SIGN",
+		"YOUR LIGHT JUST DID A BACKFLIP OFF A CLIFF",
+		"THE DARKNESS JUST DABBED ON YOUR GRAVE",
+	]
+	var msg: String = death_msgs[randi() % death_msgs.size()]
+
+	# Star rating
+	var star_count := 1
+	if RunState.deaths == 0:
+		star_count = 3
+	elif RunState.deaths <= 1:
+		star_count = 2
+	var stars_text := ""
+	for i in range(3):
+		stars_text += "★" if i < star_count else "☆"
+
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -625,27 +665,104 @@ func build_results(survived: float, seed_hex: String, level_reached: int) -> Con
 	center.add_child(panel)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
+	box.add_theme_constant_override("separation", 8)
 	panel.add_child(box)
 
 	var m := int(survived) / 60
 	var s := int(survived) % 60
 
-	box.add_child(_res_label("THE LIGHT WENT OUT", 26, MAGENTA))
-	box.add_child(_res_label("reached LEVEL %d  ·  survived %d:%02d" % [level_reached, m, s], 22, Color.WHITE))
-	box.add_child(_res_label("%d shadows dispelled   ·   ◆ %d collected" % [RunState.kills, RunState.shards], 16, DIM))
+	# Funny death message
+	box.add_child(_res_label(msg, 22, MAGENTA))
+	# Stars
+	var star_label := _res_label(stars_text, 30, Color(1.0, 0.85, 0.0))
+	box.add_child(star_label)
+	box.add_child(_res_label(" ", 4, DIM))
+	# Stats grid
+	box.add_child(_res_label("LEVEL %d  ·  %d:%02d" % [level_reached, m, s], 20, Color.WHITE))
+	box.add_child(_res_label("%d kills  ·  %d gems earned" % [RunState.kills, RunState.gems_earned], 16, DIM))
+	box.add_child(_res_label("%d deaths  ·  ◆ %d shards" % [RunState.deaths, RunState.shards], 16, DIM))
 	box.add_child(_res_label(" ", 6, DIM))
-	box.add_child(_res_label("+%d SHARDS" % RunState.shards, 32, AMBER))
-	box.add_child(_res_label("seed %s" % seed_hex, 13, Color(1, 1, 1, 0.3)))
-	box.add_child(_res_label(" ", 6, DIM))
-	var cta := _res_label("touch to surface", 16, CYAN)
-	box.add_child(cta)
-	var tw := cta.create_tween().set_loops()
-	tw.tween_property(cta, "modulate:a", 0.3, 0.7)
-	tw.tween_property(cta, "modulate:a", 1.0, 0.7)
+	box.add_child(_res_label("+%d GEMS" % RunState.gems_earned, 28, AMBER))
+	box.add_child(_res_label("seed %s" % seed_hex, 12, Color(1, 1, 1, 0.25)))
+	box.add_child(_res_label(" ", 8, DIM))
+
+	# Retry button
+	var retry := Button.new()
+	retry.text = "RETRY"
+	retry.custom_minimum_size = Vector2(200, 50)
+	retry.add_theme_font_size_override("font_size", 22)
+	retry.pressed.connect(_on_retry)
+	box.add_child(retry)
+
+	# Menu button
+	var menu_btn := Button.new()
+	menu_btn.text = "MENU"
+	menu_btn.custom_minimum_size = Vector2(200, 50)
+	menu_btn.add_theme_font_size_override("font_size", 18)
+	menu_btn.pressed.connect(_on_menu)
+	box.add_child(menu_btn)
+
+	# Share card button
+	var share := Button.new()
+	share.text = "SHARE RUN"
+	share.custom_minimum_size = Vector2(200, 50)
+	share.add_theme_font_size_override("font_size", 16)
+	share.pressed.connect(_on_share.bind(level_reached, survived, RunState.kills, RunState.gems_earned, star_count))
+	box.add_child(share)
 
 	add_child(center)
 	return center
+
+
+func _on_retry() -> void:
+	# Restart the same level
+	RunState.reset_run(RunState.start_level)
+	GameState.change_state(GameState.State.RUN)
+	get_tree().change_scene_to_file("res://scenes/arena.tscn")
+
+
+func _on_menu() -> void:
+	GameState.change_state(GameState.State.MENU)
+	get_tree().change_scene_to_file("res://scenes/boot.tscn")
+
+
+func _on_share(lv: int, time: float, kills: int, gems: int, stars: int) -> void:
+	# Build shareable text card
+	var m := int(time) / 60
+	var s := int(time) % 60
+	var stars_text := ""
+	for i in range(3):
+		stars_text += "★" if i < stars else "☆"
+	var text := "⚡ AFTERGLOW — Run Report\n"
+	text += "%s Level %d\n" % [stars_text, lv]
+	text += "%d:%02d · %d kills · %d gems\n" % [m, s, kills, gems]
+	text += "Can you outshine me? 🌟"
+	# Copy to clipboard on Android
+	if DisplayServer.clipboard_has():
+		DisplayServer.clipboard_set(text)
+	else:
+		DisplayServer.clipboard_set(text)
+	# Show confirmation
+	_show_share_confirm()
+
+
+func _show_share_confirm() -> void:
+	# Brief "Copied!" popup
+	var popup := Label.new()
+	popup.text = "✓ COPIED TO CLIPBOARD — PASTE IN CHAT!"
+	popup.add_theme_font_size_override("font_size", 16)
+	popup.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
+	popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.set_anchors_preset(Control.PRESET_CENTER)
+	popup.offset_left = -160
+	popup.offset_right = 160
+	popup.offset_top = -20
+	popup.offset_bottom = 20
+	add_child(popup)
+	var tw := popup.create_tween()
+	tw.tween_interval(1.5)
+	tw.tween_property(popup, "modulate:a", 0.0, 0.3)
+	tw.tween_callback(popup.queue_free)
 
 
 func _res_label(text: String, size: int, col: Color) -> Label:

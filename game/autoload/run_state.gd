@@ -12,9 +12,11 @@ var deaths := 0
 var max_hp := 3
 var hp := 3
 var run_time := 0.0
+var start_level := 1
 
 
-func reset_run() -> void:
+func reset_run(lv: int = 1) -> void:
+	start_level = lv
 	shards = 0
 	gems_earned = 0
 	time_alive = 0.0

@@ -102,7 +102,7 @@ func _ready() -> void:
 	hud.dash_requested.connect(_on_dash_pressed)
 
 	_equip_weapon("pulse", true)
-	_build_level(1)
+	_build_level(RunState.start_level)
 	Audio.play("level_start")
 	hud.show_banner("LEVEL 1", Color(0.0, 0.94, 1.0))
 	hud.refresh_hp(player.effective_max_hp())
@@ -144,6 +144,14 @@ func _build_level(n: int) -> void:
 		var brutes := mini(n - 2, 6)
 		for i in range(brutes):
 			_spawn_queue.append(ShadowEnemy.Kind.BRUTE)
+	if n >= 4:
+		var phantoms := mini((n - 3) * 2, 8)
+		for i in range(phantoms):
+			_spawn_queue.append(ShadowEnemy.Kind.PHANTOM)
+	if n >= 5:
+		var bombers := mini((n - 4) * 2, 6)
+		for i in range(bombers):
+			_spawn_queue.append(ShadowEnemy.Kind.BOMBER)
 	# Fisher-Yates with the run's seeded rng — same layout every replay of a seed.
 	for i in range(_spawn_queue.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
@@ -416,6 +424,7 @@ func _process(delta: float) -> void:
 	_bolts_vs_enemies()
 	_orbs_tick(delta)
 	_enemies_vs_player()
+	_bomber_check()
 	_shake = maxf(0.0, _shake - delta * 22.0)
 	world.position = Vector2(rng.randf_range(-_shake, _shake), rng.randf_range(-_shake, _shake))
 	camera.position = player.global_position
@@ -522,6 +531,23 @@ func _enemies_vs_player() -> void:
 		if e.global_position.distance_squared_to(player.global_position) < contact * contact:
 			if player.try_take_damage(e.damage, e.global_position):
 				e.shove((e.global_position - player.global_position).normalized(), 14.0)
+
+
+func _bomber_check() -> void:
+	for e in enemies:
+		if not e.active:
+			continue
+		if e.should_explode():
+			# Bomb explosion — area damage to player
+			var dist := e.global_position.distance_to(player.global_position)
+			if dist < 160.0:
+				var dir := (player.global_position - e.global_position).normalized()
+				player.try_take_damage(2, e.global_position)
+				player._knockback = dir * 300.0
+			# Explosion visual
+			_spawn_death_shockwave(e.global_position, Color(1.0, 0.5, 0.0, 0.8), 120.0)
+			Audio.play("elite_die", -3.0)
+			kill_enemy(e)
 
 
 func _on_spit_requested(from_pos: Vector2, target_pos: Vector2) -> void:
@@ -755,6 +781,7 @@ func _begin_death() -> void:
 	Engine.time_scale = 1.0
 	GameState.change_state(GameState.State.RESULTS)
 	SaveSystem.mark_run_finished(level, RunState.gems_earned, RunState.run_time)
+	SaveSystem.unlock_next_level(level)
 	hud.build_results(RunState.run_time, seed_hex(), level)
 	await get_tree().create_timer(0.6, true, false, true).timeout
 	_results_ready = true

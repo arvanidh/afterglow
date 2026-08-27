@@ -11,6 +11,7 @@ const DEFAULTS := {
 	"gems": 0,
 	"best_time": 0.0,
 	"best_level": 1,
+	"highest_unlocked": 1,
 	"runs": 0,
 	"upgrades": {},
 	"unlocked_weapons": ["pulse"],
@@ -123,6 +124,18 @@ func buy_upgrade(id: String) -> bool:
 	data["upgrades"] = ups
 	save(data)
 	return true
+
+
+func unlock_next_level(reached: int) -> void:
+	var data := load_save()
+	var cur: int = int(data.get("highest_unlocked", 1))
+	if reached >= cur:
+		data["highest_unlocked"] = reached + 1
+		save(data)
+
+
+func get_highest_unlocked() -> int:
+	return int(load_save().get("highest_unlocked", 1))
 
 
 func has_weapon(id: String) -> bool:
