@@ -672,8 +672,8 @@ func _draw_radar() -> void:
 
 # ---------------------------------------------------------------- results
 
-func build_results(survived: float, seed_hex: String, level_reached: int) -> Control:
-	# Funny death messages — pick one randomly
+func build_results(survived: float, seed_hex: String, level_reached: int, is_victory: bool = false) -> Control:
+	# Funny death messages or victory
 	var death_msgs := [
 		"THE LIGHT WENT OUT",
 		"SCREENED BY A SHADOW",
@@ -701,7 +701,18 @@ func build_results(survived: float, seed_hex: String, level_reached: int) -> Con
 		"YOUR LIGHT JUST DID A BACKFLIP OFF A CLIFF",
 		"THE DARKNESS JUST DABBED ON YOUR GRAVE",
 	]
-	var msg: String = death_msgs[randi() % death_msgs.size()]
+	var victory_msgs := [
+		"THE DARKNESS IS GONE",
+		"THE CITY SHINES AGAIN",
+		"YOU ARE THE LIGHT",
+		"OUTSHINED THEM ALL",
+		"TOTAL VICTORY",
+	]
+	var msg: String
+	if is_victory:
+		msg = victory_msgs[randi() % victory_msgs.size()]
+	else:
+		msg = death_msgs[randi() % death_msgs.size()]
 
 	# Star rating
 	var star_count := 1

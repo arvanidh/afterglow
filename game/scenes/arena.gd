@@ -186,32 +186,34 @@ func _exit_tree() -> void:
 
 func _build_level(n: int) -> void:
 	_spawn_queue.clear()
-	var shades := mini(3 + n * 2, 30)
+	# Infinite mode: caps grow after level 30
+	var inf := maxi(n - 30, 0)
+	var shades := mini(3 + n * 2, 30 + inf)
 	for i in range(shades):
 		_spawn_queue.append(ShadowEnemy.Kind.SHADE)
 	if n >= 2:
-		var swarmlets := mini((n - 1) * 3, 26)
+		var swarmlets := mini((n - 1) * 3, 26 + inf)
 		for i in range(swarmlets):
 			_spawn_queue.append(ShadowEnemy.Kind.SWARMLET)
 	if n >= 2:
-		var spitters := mini(1 + (n - 2) * 2, 10)
+		var spitters := mini(1 + (n - 2) * 2, 10 + inf / 2)
 		for i in range(spitters):
 			_spawn_queue.append(ShadowEnemy.Kind.SPITTER)
 	if n >= 3:
-		var brutes := mini(n - 2, 6)
+		var brutes := mini(n - 2, 6 + inf / 3)
 		for i in range(brutes):
 			_spawn_queue.append(ShadowEnemy.Kind.BRUTE)
 	if n >= 4:
-		var phantoms := mini((n - 3) * 2, 8)
+		var phantoms := mini((n - 3) * 2, 8 + inf / 2)
 		for i in range(phantoms):
 			_spawn_queue.append(ShadowEnemy.Kind.PHANTOM)
 	if n >= 5:
-		var bombers := mini((n - 4) * 2, 6)
+		var bombers := mini((n - 4) * 2, 6 + inf / 3)
 		for i in range(bombers):
 			_spawn_queue.append(ShadowEnemy.Kind.BOMBER)
-	# Boss levels: 10, 20, 30
-	if n == 10 or n == 20 or n == 30:
-		_spawn_queue.clear()  # No minions during boss
+	# Boss every 10 levels: 10, 20, 30, 40, 50...
+	if n > 0 and n % 10 == 0:
+		_spawn_queue.clear()
 	else:
 		# Fisher-Yates with the run's seeded rng — same layout every replay of a seed.
 		for i in range(_spawn_queue.size() - 1, 0, -1):
@@ -225,8 +227,8 @@ func _build_level(n: int) -> void:
 	hud.set_level(n, _spawn_queue.size())
 	# Change biome when crossing level boundaries
 	_set_biome(n)
-	# Spawn boss at levels 10, 20, 30
-	if n == 10 or n == 20 or n == 30:
+	# Spawn boss every 10 levels
+	if n > 0 and n % 10 == 0:
 		_spawn_boss(n)
 
 
@@ -331,7 +333,10 @@ func remaining_count() -> int:
 # ---------------------------------------------------------------- spawning
 
 func _speed_scale() -> float:
-	return minf(1.0 + RunState.run_time / 600.0, 1.35)
+	# Infinite mode: speed scales higher after level 30
+	var base := 1.0 + RunState.run_time / 600.0
+	var inf_bonus := 0.0 if level <= 30 else float(level - 30) * 0.02
+	return minf(base + inf_bonus, 2.0)
 
 
 func _ring_point() -> Vector2:
@@ -340,13 +345,9 @@ func _ring_point() -> Vector2:
 
 
 func _spawn_boss(level_num: int) -> void:
-	var boss_kind: Boss.Kind
-	if level_num == 10:
-		boss_kind = Boss.Kind.WATCHER
-	elif level_num == 20:
-		boss_kind = Boss.Kind.DEVOURER
-	else:
-		boss_kind = Boss.Kind.VOID
+	# Cycle bosses: Watcher(10) -> Devourer(20) -> Void(30) -> Watcher(40)...
+	var boss_cycle := [Boss.Kind.WATCHER, Boss.Kind.DEVOURER, Boss.Kind.VOID]
+	var boss_kind: Boss.Kind = boss_cycle[(level_num / 10 - 1) % 3]
 	_boss = Boss.new()
 	_boss.setup(boss_kind, player)
 	_boss.died.connect(_on_boss_died)
@@ -998,6 +999,7 @@ func _begin_death() -> void:
 		Missions.track_no_death_level(level)
 	if RunState.is_daily:
 		DailyChallenge.save_daily_result(level, RunState.kills, RunState.gems_earned, RunState.run_time)
-	hud.build_results(RunState.run_time, seed_hex(), level)
+	var is_victory := level >= 30
+	hud.build_results(RunState.run_time, seed_hex(), level, is_victory)
 	await get_tree().create_timer(0.6, true, false, true).timeout
 	_results_ready = true
