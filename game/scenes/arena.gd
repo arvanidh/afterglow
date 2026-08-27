@@ -80,6 +80,9 @@ func _ready() -> void:
 	player.took_damage.connect(_on_player_took_damage)
 	player.dashed.connect(_on_player_dashed)
 	world.add_child(player)
+	# Apply character stats
+	var char_id := SaveSystem.get_selected_character()
+	CharacterDb.apply_to_player(player, char_id)
 	# Apply permanent upgrades from SaveSystem
 	_apply_permanent_upgrades()
 	# Set biome based on starting level
@@ -105,7 +108,11 @@ func _ready() -> void:
 	hud.layout_pause_button(get_viewport_rect().size)
 	hud.dash_requested.connect(_on_dash_pressed)
 
-	_equip_weapon("pulse", true)
+	# Equip character's starting weapon
+	var char_data := CharacterDb.get_by_id(char_id)
+	var start_wep: String = String(char_data["start_weapon"])
+	_equip_weapon(start_wep, true)
+	owned_guns = [start_wep]
 	_build_level(RunState.start_level)
 	Audio.play("level_start")
 	hud.show_banner("LEVEL %d" % RunState.start_level, Color(0.0, 0.94, 1.0))

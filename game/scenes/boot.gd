@@ -28,6 +28,22 @@ func _ready() -> void:
 	gem_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.0))
 	gem_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	$UI/CenterBox/VBox.add_child(gem_label)
+	# Character selector
+	var char_id := SaveSystem.get_selected_character()
+	var char_data := CharacterDb.get_by_id(char_id)
+	var char_label := Label.new()
+	char_label.name = "CharLabel"
+	char_label.text = "Playing as: %s" % String(char_data["name"])
+	char_label.add_theme_font_size_override("font_size", 16)
+	char_label.add_theme_color_override("font_color", char_data["color"])
+	char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	$UI/CenterBox/VBox.add_child(char_label)
+	var char_btn := Button.new()
+	char_btn.text = "CHANGE CHARACTER"
+	char_btn.custom_minimum_size = Vector2(200, 45)
+	char_btn.add_theme_font_size_override("font_size", 18)
+	char_btn.pressed.connect(_open_character_select)
+	$UI/CenterBox/VBox.add_child(char_btn)
 	_pulse(title, 1.2)
 	_pulse(hint, 0.75)
 	var controls := Label.new()
@@ -74,6 +90,118 @@ func _start_run() -> void:
 	RunState.reset_run()
 	GameState.change_state(GameState.State.RUN)
 	get_tree().change_scene_to_file("res://scenes/arena.tscn")
+
+
+func _open_character_select() -> void:
+	if _shop_root != null:
+		return
+	var current := SaveSystem.get_selected_character()
+	_shop_root = CanvasLayer.new()
+	_shop_root.layer = 20
+	add_child(_shop_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.01, 0.03, 0.92)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(dim)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 30
+	scroll.offset_right = -30
+	scroll.offset_top = 40
+	scroll.offset_bottom = -40
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 16)
+	scroll.add_child(content)
+	var t := Label.new()
+	t.text = "CHOOSE YOUR SPARK"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 30)
+	t.add_theme_color_override("font_color", Color(0.0, 0.94, 1.0))
+	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	t.add_theme_constant_override("shadow_offset_y", 2)
+	content.add_child(t)
+	for char_data: Dictionary in CharacterDb.get_all():
+		var id: String = char_data["id"]
+		var selected := id == current
+		var card := PanelContainer.new()
+		card.custom_minimum_size = Vector2(0, 100)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.08, 0.09, 0.18, 0.95)
+		sb.border_color = char_data["color"] if selected else Color(1, 1, 1, 0.15)
+		sb.set_border_width_all(2 if selected else 1)
+		sb.set_corner_radius_all(10)
+		sb.content_margin_left = 16
+		sb.content_margin_right = 16
+		sb.content_margin_top = 12
+		sb.content_margin_bottom = 12
+		card.add_theme_stylebox_override("panel", sb)
+		var hbox := HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 12)
+		card.add_child(hbox)
+		var vbox := VBoxContainer.new()
+		vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		vbox.add_theme_constant_override("separation", 4)
+		hbox.add_child(vbox)
+		var name_label := Label.new()
+		name_label.text = String(char_data["name"])
+		name_label.add_theme_font_size_override("font_size", 22)
+		name_label.add_theme_color_override("font_color", char_data["color"])
+		vbox.add_child(name_label)
+		var desc_label := Label.new()
+		desc_label.text = String(char_data["desc"])
+		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_label.add_theme_font_size_override("font_size", 14)
+		desc_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+		vbox.add_child(desc_label)
+		var stats_label := Label.new()
+		stats_label.text = "HP %d  |  SPD %d%%  |  DMG %d%%  |  Rate %d%%" % [
+			int(char_data["hp"]),
+			int(float(char_data["speed_mult"]) * 100),
+			int(float(char_data["damage_mult"]) * 100),
+			int(float(char_data["rate_mult"]) * 100),
+		]
+		stats_label.add_theme_font_size_override("font_size", 13)
+		stats_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
+		vbox.add_child(stats_label)
+		if selected:
+			var sel_label := Label.new()
+			sel_label.text = "SELECTED"
+			sel_label.add_theme_font_size_override("font_size", 14)
+			sel_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
+			sel_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			hbox.add_child(sel_label)
+		else:
+			var btn := Button.new()
+			btn.text = "SELECT"
+			btn.custom_minimum_size = Vector2(90, 44)
+			btn.add_theme_font_size_override("font_size", 16)
+			btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			btn.pressed.connect(_select_character.bind(id))
+			hbox.add_child(btn)
+		content.add_child(card)
+	var close := Button.new()
+	close.text = "BACK"
+	close.custom_minimum_size = Vector2(0, 55)
+	close.add_theme_font_size_override("font_size", 22)
+	close.pressed.connect(_close_overlay)
+	content.add_child(close)
+
+
+func _select_character(id: String) -> void:
+	SaveSystem.set_selected_character(id)
+	Audio.play("powerup", -2.0)
+	_close_overlay()
+	# Refresh the character label on menu
+	var char_data := CharacterDb.get_by_id(id)
+	var char_label := get_node_or_null("UI/CenterBox/VBox/CharLabel")
+	if char_label:
+		char_label.text = "Playing as: %s" % String(char_data["name"])
+		char_label.add_theme_color_override("font_color", char_data["color"])
 
 
 func _open_tutorial() -> void:

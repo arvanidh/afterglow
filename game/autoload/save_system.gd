@@ -13,6 +13,7 @@ const DEFAULTS := {
 	"best_level": 1,
 	"highest_unlocked": 1,
 	"runs": 0,
+	"selected_character": "spark",
 	"upgrades": {},
 	"unlocked_weapons": ["pulse"],
 	"level_stars": {},
@@ -124,6 +125,16 @@ func buy_upgrade(id: String) -> bool:
 	data["upgrades"] = ups
 	save(data)
 	return true
+
+
+func set_selected_character(id: String) -> void:
+	var data := load_save()
+	data["selected_character"] = id
+	save(data)
+
+
+func get_selected_character() -> String:
+	return load_save().get("selected_character", "spark")
 
 
 func unlock_next_level(reached: int) -> void:
