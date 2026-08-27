@@ -3,9 +3,9 @@ extends Node2D
 ## Weird, funny enemies with comedic behaviors and death effects.
 ## JOKER: laughs and drops confetti
 ## RUBBER_DUCK: bounces erratically, squeaks when hit
-## PIÑATA: explodes into gems + confetti on death
+## PINATA: explodes into gems + confetti on death
 
-enum Kind { JOKER, RUBBER_DUCK, PIÑATA }
+enum Kind { JOKER, RUBBER_DUCK, PINATA }
 
 const STATS := {
 	Kind.JOKER: {
@@ -18,7 +18,7 @@ const STATS := {
 		"body": Color("2e2a0d"), "rim": Color("5a4a10"), "eye": Color(1.0, 0.9, 0.0),
 		"gems": 2,
 	},
-	Kind.PIÑATA: {
+	Kind.PINATA: {
 		"hp": 3, "speed": 60.0, "radius": 16.0, "damage": 1,
 		"body": Color("0d2e1a"), "rim": Color("105a2a"), "eye": Color(0.0, 1.0, 0.5),
 		"gems": 8,
@@ -96,7 +96,7 @@ func _process(delta: float) -> void:
 			_process_joker(delta)
 		Kind.RUBBER_DUCK:
 			_process_duck(delta)
-		Kind.PIÑATA:
+		Kind.PINATA:
 			_process_pinata(delta)
 	queue_redraw()
 
@@ -136,7 +136,7 @@ func _process_duck(delta: float) -> void:
 
 
 func _process_pinata(delta: float) -> void:
-	# Piñata: slow, takes lots of hits, drops gems when damaged
+	# Pinata: slow, takes lots of hits, drops gems when damaged
 	global_position += (_player.global_position - global_position).normalized() * speed * delta
 
 
@@ -187,7 +187,7 @@ func _draw() -> void:
 			if _bounce_timer > 0.0:
 				draw_arc(Vector2.ZERO, radius + 6.0, 0.0, TAU, 20, Color(1.0, 0.9, 0.0, 0.4), 1.5)
 		
-		Kind.PIÑATA:
+		Kind.PINATA:
 			# Colorful piñata body
 			var t := Time.get_ticks_msec() * 0.003
 			for i in range(5):

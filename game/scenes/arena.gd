@@ -451,7 +451,7 @@ func _spawn_funny(id: String) -> void:
 	if funny_enemies.size() >= 10 or _ending:
 		return
 	var f: FunnyEnemy = FunnyEnemy.new()
-	var kind_map := {"joker": FunnyEnemy.Kind.JOKER, "rubber_duck": FunnyEnemy.Kind.RUBBER_DUCK, "pinata": FunnyEnemy.Kind.PIÑATA}
+	var kind_map := {"joker": FunnyEnemy.Kind.JOKER, "rubber_duck": FunnyEnemy.Kind.RUBBER_DUCK, "pinata": FunnyEnemy.Kind.PINATA}
 	if not kind_map.has(id):
 		return
 	f.setup(kind_map[id], player, rng)
@@ -520,10 +520,10 @@ func kill_funny_enemy(f: FunnyEnemy) -> void:
 			_spawn_death_shockwave(f.global_position, Color(1.0, 0.9, 0.0, 0.6), 50.0)
 			RunState.add_gems(3)
 			hud.spawn_float(f.global_position, "+3 GEMS", Color(1.0, 0.72, 0.0))
-		FunnyEnemy.Kind.PIÑATA:
+		FunnyEnemy.Kind.PINATA:
 			Audio.play("combo5", -1.0)
 			shake(6.0)
-			hud.show_announcer("PIÑATA SMASHED!", Color(0.0, 1.0, 0.5))
+			hud.show_announcer("PINATA SMASHED!", Color(0.0, 1.0, 0.5))
 			for i in range(20):
 				var p := CPUParticles2D.new()
 				p.position = world.to_local(f.global_position)
