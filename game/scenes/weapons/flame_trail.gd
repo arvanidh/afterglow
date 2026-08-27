@@ -67,17 +67,19 @@ func _process(delta: float) -> void:
 func _tick_damage(patch: FirePatch) -> void:
 	if arena == null:
 		return
-	for e in arena.enemies:
-		if not e.active:
+	# Copy enemy list to avoid modification during iteration
+	var snapshot: Array = arena.enemies.duplicate()
+	for e in snapshot:
+		if not is_instance_valid(e) or not e.active:
 			continue
-		var dist := patch.global_position.distance_to(e.global_position)
+		var dist: float = patch.global_position.distance_to(e.global_position)
 		if dist < patch.size + e.radius:
 			hud_spawn_float(e.global_position, str(patch.damage), Color(1.0, 0.5, 0.0))
 			if e.take_hit(patch.damage):
 				arena.kill_enemy(e)
 	# Boss too
 	if arena._boss != null and arena._boss.active:
-		var dist := patch.global_position.distance_to(arena._boss.global_position)
+		var dist: float = patch.global_position.distance_to(arena._boss.global_position)
 		if dist < patch.size + arena._boss.radius:
 			hud_spawn_float(arena._boss.global_position, str(patch.damage), Color(1.0, 0.5, 0.0))
 			if arena._boss.take_hit(patch.damage):

@@ -74,14 +74,14 @@ func _process(delta: float) -> void:
 			hud_spawn_float(e.global_position, str(dmg), Color(0.5, 0.85, 1.0))
 			if e.take_hit(dmg):
 				arena.kill_enemy(e)
-			# Apply slow
-			e.speed *= (1.0 - slow)
-			# Slow wears off after duration
-			var orig_speed: float = float(ShadowEnemy.STATS[e.kind]["speed"])
-			arena.get_tree().create_timer(slow_dur).timeout.connect(func():
-				if e.active:
-					e.speed = orig_speed
-			)
+			# Apply slow (only if enemy survived)
+			if e.active:
+				var orig_speed: float = float(ShadowEnemy.STATS[e.kind]["speed"])
+				e.speed = orig_speed * (1.0 - slow)
+				arena.get_tree().create_timer(slow_dur).timeout.connect(func():
+					if is_instance_valid(e) and e.active:
+						e.speed = orig_speed
+				)
 	# Damage boss too
 	if arena._boss != null and arena._boss.active:
 		var dist: float = arena.player.global_position.distance_to(arena._boss.global_position)
