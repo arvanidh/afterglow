@@ -20,12 +20,19 @@ const DEFAULTS := {
 }
 
 const UPGRADES := {
-	"max_hp": {"title": "Extra Heart", "desc": "+1 max HP", "costs": [15, 40, 80, 150, 250], "max": 5},
-	"start_weapon": {"title": "Armed Start", "desc": "Start with Orbit Blades", "costs": [50], "max": 1},
-	"start_weapon_nova": {"title": "Nova Start", "desc": "Start with Nova Burst", "costs": [80], "max": 1},
-	"magnet_range": {"title": "Magnet Core", "desc": "+30% pickup reach", "costs": [20, 50], "max": 2},
-	"xp_boost": {"title": "Quick Study", "desc": "+25% XP gain", "costs": [30, 70], "max": 2},
-	"crit_chance": {"title": "Lucky Strike", "desc": "+8% crit chance", "costs": [40, 90, 160], "max": 3},
+	"max_hp": {"title": "Extra Heart", "desc": "+1 max HP", "costs": [15, 40, 80, 150, 250], "max": 5, "category": "vitality"},
+	"start_weapon": {"title": "Armed Start", "desc": "Start with Orbit Blades", "costs": [50], "max": 1, "category": "offense"},
+	"start_weapon_nova": {"title": "Nova Start", "desc": "Start with Nova Burst", "costs": [80], "max": 1, "category": "offense"},
+	"magnet_range": {"title": "Magnet Core", "desc": "+30% pickup reach", "costs": [20, 50], "max": 2, "category": "utility"},
+	"xp_boost": {"title": "Quick Study", "desc": "+25% XP gain", "costs": [30, 70], "max": 2, "category": "utility"},
+	"crit_chance": {"title": "Lucky Strike", "desc": "+8% crit chance", "costs": [40, 90, 160], "max": 3, "category": "offense"},
+	# Meta progression — deeper upgrade tree
+	"gem_magnet": {"title": "Gem Magnet", "desc": "Enemies drop 1 extra gem every 5 kills", "costs": [60, 120], "max": 2, "category": "economy"},
+	"revive": {"title": "Second Wind", "desc": "Revive once per run with 1 HP", "costs": [200], "max": 1, "category": "vitality"},
+	"start_shield": {"title": "Shield Start", "desc": "Start each run with +1 HP", "costs": [100], "max": 1, "category": "vitality"},
+	"combo_master": {"title": "Combo Master", "desc": "+20% combo fire rate bonus", "costs": [80, 160], "max": 2, "category": "offense"},
+	"treasure_hunter": {"title": "Treasure Hunter", "desc": "+50% gem drops from bosses", "costs": [150], "max": 1, "category": "economy"},
+	"glass_cannon": {"title": "Glass Cannon", "desc": "+40% damage, -1 max HP", "costs": [120], "max": 1, "category": "offense"},
 }
 
 

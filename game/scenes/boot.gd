@@ -58,6 +58,25 @@ func _ready() -> void:
 	level_map_btn.add_theme_font_size_override("font_size", 22)
 	level_map_btn.pressed.connect(_open_level_map)
 	$UI/CenterBox/VBox.add_child(level_map_btn)
+	# Daily Challenge button
+	var daily_btn := Button.new()
+	daily_btn.text = "DAILY CHALLENGE"
+	daily_btn.custom_minimum_size = Vector2(200, 50)
+	daily_btn.add_theme_font_size_override("font_size", 22)
+	if DailyChallenge.is_daily_completed():
+		daily_btn.text = "DAILY ✓ COMPLETED"
+		daily_btn.disabled = true
+	daily_btn.pressed.connect(_start_daily)
+	$UI/CenterBox/VBox.add_child(daily_btn)
+	# Show daily best if completed
+	if DailyChallenge.is_daily_completed():
+		var daily_best := DailyChallenge.get_daily_best()
+		var daily_label := Label.new()
+		daily_label.text = "Today: LV %d · %d kills" % [int(daily_best.get("level", 0)), int(daily_best.get("kills", 0))]
+		daily_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		daily_label.add_theme_font_size_override("font_size", 14)
+		daily_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
+		$UI/CenterBox/VBox.add_child(daily_label)
 	var shop_btn := Button.new()
 	shop_btn.text = "SHOP"
 	shop_btn.custom_minimum_size = Vector2(200, 50)
@@ -70,6 +89,13 @@ func _ready() -> void:
 	help_btn.add_theme_font_size_override("font_size", 22)
 	help_btn.pressed.connect(_open_tutorial)
 	$UI/CenterBox/VBox.add_child(help_btn)
+	# Missions button
+	var missions_btn := Button.new()
+	missions_btn.text = "MISSIONS"
+	missions_btn.custom_minimum_size = Vector2(200, 50)
+	missions_btn.add_theme_font_size_override("font_size", 22)
+	missions_btn.pressed.connect(_open_missions)
+	$UI/CenterBox/VBox.add_child(missions_btn)
 
 
 func _pulse(item: CanvasItem, period: float) -> void:
@@ -88,6 +114,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _start_run() -> void:
 	RunState.reset_run()
+	GameState.change_state(GameState.State.RUN)
+	get_tree().change_scene_to_file("res://scenes/arena.tscn")
+
+
+func _start_daily() -> void:
+	RunState.reset_run()
+	RunState.is_daily = true
 	GameState.change_state(GameState.State.RUN)
 	get_tree().change_scene_to_file("res://scenes/arena.tscn")
 
@@ -202,6 +235,113 @@ func _select_character(id: String) -> void:
 	if char_label:
 		char_label.text = "Playing as: %s" % String(char_data["name"])
 		char_label.add_theme_color_override("font_color", char_data["color"])
+
+
+func _open_missions() -> void:
+	if _shop_root != null:
+		return
+	_shop_root = CanvasLayer.new()
+	_shop_root.layer = 20
+	add_child(_shop_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.01, 0.03, 0.92)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(dim)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 20
+	scroll.offset_right = -20
+	scroll.offset_top = 40
+	scroll.offset_bottom = -40
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_root.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 10)
+	scroll.add_child(content)
+	var t := Label.new()
+	t.text = "MISSIONS"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 30)
+	t.add_theme_color_override("font_color", Color(0.0, 0.94, 1.0))
+	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	t.add_theme_constant_override("shadow_offset_y", 2)
+	content.add_child(t)
+	var missions := Missions.get_progress()
+	for m: Dictionary in missions:
+		var card := PanelContainer.new()
+		card.custom_minimum_size = Vector2(0, 70)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.08, 0.09, 0.18, 0.95)
+		if m["completed"] and not m["claimed"]:
+			sb.border_color = Color(1.0, 0.72, 0.0)
+			sb.set_border_width_all(2)
+		elif m["claimed"]:
+			sb.border_color = Color(0.3, 1.0, 0.5)
+			sb.set_border_width_all(1)
+		else:
+			sb.border_color = Color(1, 1, 1, 0.1)
+			sb.set_border_width_all(1)
+		sb.set_corner_radius_all(10)
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		sb.content_margin_top = 8
+		sb.content_margin_bottom = 8
+		card.add_theme_stylebox_override("panel", sb)
+		var hbox := HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 8)
+		card.add_child(hbox)
+		var vbox := VBoxContainer.new()
+		vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		vbox.add_theme_constant_override("separation", 2)
+		hbox.add_child(vbox)
+		var title_label := Label.new()
+		title_label.text = String(m["title"])
+		title_label.add_theme_font_size_override("font_size", 16)
+		title_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.0) if m["completed"] and not m["claimed"] else Color.WHITE)
+		vbox.add_child(title_label)
+		var desc_label := Label.new()
+		desc_label.text = String(m["desc"])
+		desc_label.add_theme_font_size_override("font_size", 13)
+		desc_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+		vbox.add_child(desc_label)
+		var prog_label := Label.new()
+		prog_label.text = "%d / %d" % [int(m["progress"]), int(m["target"])]
+		prog_label.add_theme_font_size_override("font_size", 12)
+		prog_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5) if m["completed"] else Color(1, 1, 1, 0.3))
+		vbox.add_child(prog_label)
+		if m["claimed"]:
+			var done_label := Label.new()
+			done_label.text = "✓ DONE"
+			done_label.add_theme_font_size_override("font_size", 14)
+			done_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
+			done_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			hbox.add_child(done_label)
+		elif m["completed"]:
+			var claim_btn := Button.new()
+			claim_btn.text = "+%d" % int(m["reward"])
+			claim_btn.custom_minimum_size = Vector2(70, 36)
+			claim_btn.add_theme_font_size_override("font_size", 14)
+			claim_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			claim_btn.pressed.connect(_claim_mission.bind(m["id"]))
+			hbox.add_child(claim_btn)
+		content.add_child(card)
+	var close := Button.new()
+	close.text = "BACK"
+	close.custom_minimum_size = Vector2(0, 55)
+	close.add_theme_font_size_override("font_size", 22)
+	close.pressed.connect(_close_overlay)
+	content.add_child(close)
+
+
+func _claim_mission(id: String) -> void:
+	var reward := Missions.claim_reward(id)
+	if reward > 0:
+		Audio.play("powerup", -2.0)
+		_close_overlay()
+		_open_missions()
 
 
 func _open_tutorial() -> void:

@@ -20,6 +20,8 @@ SaveSystem="*res://autoload/save_system.gd"
 Analytics="*res://autoload/analytics.gd"
 AdsManager="*res://autoload/ads_manager.gd"
 Audio="*res://autoload/audio.gd"
+DailyChallenge="*res://autoload/daily_challenge.gd"
+Missions="*res://autoload/missions.gd"
 
 [display]
 

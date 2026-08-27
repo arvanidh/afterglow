@@ -67,7 +67,10 @@ var _results_ready := false
 
 
 func _ready() -> void:
-	run_seed = randi()
+	if RunState.is_daily:
+		run_seed = DailyChallenge.get_today_seed()
+	else:
+		run_seed = randi()
 	rng.seed = run_seed
 	GameState.change_state(GameState.State.RUN)
 
@@ -143,7 +146,21 @@ func _set_biome(level_num: int) -> void:
 func _apply_permanent_upgrades() -> void:
 	var hp_bonus := SaveSystem.get_upgrade_level("max_hp")
 	RunState.max_hp = 3 + hp_bonus
+	# Shield Start: +1 HP
+	if SaveSystem.get_upgrade_level("start_shield") > 0:
+		RunState.max_hp += 1
+	# Glass Cannon: -1 HP but +40% damage
+	if SaveSystem.get_upgrade_level("glass_cannon") > 0:
+		RunState.max_hp = maxi(RunState.max_hp - 1, 1)
+		player.mods["dmg_mult"] = float(player.mods["dmg_mult"]) + 0.4
 	RunState.hp = RunState.max_hp
+	# Apply start weapon upgrades
+	if SaveSystem.get_upgrade_level("start_weapon") > 0:
+		owned_guns.append("orbit")
+		gun_lv["orbit"] = 1
+	if SaveSystem.get_upgrade_level("start_weapon_nova") > 0:
+		owned_guns.append("nova")
+		gun_lv["nova"] = 1
 
 func seed_hex() -> String:
 	return "%05X" % (absi(run_seed) % 1048576)
@@ -263,6 +280,7 @@ func _level_cleared() -> void:
 	hud.flash_level_up()
 	hud.show_announcer("LEVEL CLEAR", Color(1.0, 0.72, 0.0))
 	hud.show_banner("LEVEL %d CLEAR  ·  +1 HP" % level, Color(1.0, 0.72, 0.0), 1.5)
+	Missions.track_level(level)
 	# Bonus gem drop on level clear
 	Analytics.design_event("level_clear", {"level": level})
 	_clear_drop_flip = not _clear_drop_flip
@@ -323,6 +341,7 @@ func _on_boss_died(boss: Boss) -> void:
 	shake(12.0)
 	Audio.play("elite_die", -1.0)
 	hud.show_announcer("BOSS DEFEATED", Color(0.0, 1.0, 0.5))
+	Missions.track_boss(Boss.STATS[boss.kind]["name"])
 	# Drop lots of loot
 	for i in range(5):
 		_acquire_mote().drop(boss.global_position + Vector2.from_angle(randf() * TAU) * 40.0, 2)
@@ -718,6 +737,7 @@ func kill_enemy(e: ShadowEnemy) -> void:
 	RunState.kills += 1
 	streak += 1
 	_streak_t = COMBO_WINDOW
+	Missions.track_kill()
 	if streak >= 3:
 		hud.combo_pop(streak)
 		# Funny combo sounds + announcer
@@ -742,6 +762,7 @@ func kill_enemy(e: ShadowEnemy) -> void:
 		elif streak % 10 == 0:
 			Audio.play("combo10", -2.0)
 			hud.show_announcer("GODLIKE", Color(1.0, 0.84, 0.0))
+	Missions.track_combo(streak)
 	if streak > 0 and streak % 5 == 0:
 		for i in range(mini(1 + streak / 10, 3)):
 			_acquire_mote().drop(e.global_position, 1)
@@ -935,6 +956,13 @@ func _begin_death() -> void:
 	GameState.change_state(GameState.State.RESULTS)
 	SaveSystem.mark_run_finished(level, RunState.gems_earned, RunState.run_time)
 	SaveSystem.unlock_next_level(level)
+	Missions.track_run()
+	Missions.track_gems(RunState.gems_earned)
+	Missions.track_weapons_collected(owned_guns.size())
+	if RunState.deaths == 0:
+		Missions.track_no_death_level(level)
+	if RunState.is_daily:
+		DailyChallenge.save_daily_result(level, RunState.kills, RunState.gems_earned, RunState.run_time)
 	hud.build_results(RunState.run_time, seed_hex(), level)
 	await get_tree().create_timer(0.6, true, false, true).timeout
 	_results_ready = true

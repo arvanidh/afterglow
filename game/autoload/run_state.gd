@@ -13,10 +13,12 @@ var max_hp := 3
 var hp := 3
 var run_time := 0.0
 var start_level := 1
+var is_daily := false
 
 
 func reset_run(lv: int = 1) -> void:
 	start_level = lv
+	is_daily = false
 	shards = 0
 	gems_earned = 0
 	time_alive = 0.0
