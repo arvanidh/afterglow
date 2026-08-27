@@ -36,7 +36,7 @@ func upgrade_note() -> String:
 
 func _process(delta: float) -> void:
 	queue_redraw()
-	if arena == null or arena._ending:
+	if arena == null or not is_instance_valid(arena) or arena._ending:
 		return
 	_cd -= delta * rate_scale
 	if _cd <= 0.0:

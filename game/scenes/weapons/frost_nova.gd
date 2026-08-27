@@ -40,7 +40,7 @@ func _player_mods() -> Dictionary:
 
 
 func _process(delta: float) -> void:
-	if arena == null:
+	if arena == null or not is_instance_valid(arena):
 		return
 	# Animate frost ring
 	if _frost_ring > 0.0:

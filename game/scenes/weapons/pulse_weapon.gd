@@ -38,7 +38,7 @@ func _player_mods() -> Dictionary:
 
 
 func _process(delta: float) -> void:
-	if arena == null:
+	if arena == null or not is_instance_valid(arena):
 		return
 	var mods := _player_mods()
 	var rate_total: float = rate_scale * float(mods.get("rate_mult", 1.0))

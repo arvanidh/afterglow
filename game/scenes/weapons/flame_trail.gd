@@ -1,26 +1,26 @@
 class_name FlameTrail
 extends Node2D
-## FLAME TRAIL — leaves fire patches on the ground that damage enemies.
-## Unique mechanic: while moving, you leave a trail of fire that burns
-## enemies who walk over it. Standing still = no fire.
+## FLAME TRAIL — fires bolts AND leaves fire patches when moving.
+## Always shoots at nearest enemy (like other weapons).
+## Moving additionally leaves burning ground.
 
-const RANGE := 180.0
+const RANGE := 460.0
 const DISPLAY_NAME := "Flame Trail"
 const ID := "flame"
 
 const LEVELS := [
-	{"interval": 0.25, "damage": 1, "lifetime": 2.0, "patch_size": 20.0},
-	{"interval": 0.22, "damage": 2, "lifetime": 2.5, "patch_size": 24.0},
-	{"interval": 0.20, "damage": 2, "lifetime": 3.0, "patch_size": 28.0},
-	{"interval": 0.18, "damage": 3, "lifetime": 3.5, "patch_size": 32.0},
-	{"interval": 0.15, "damage": 4, "lifetime": 4.0, "patch_size": 36.0},
+	{"interval": 0.40, "damage": 1, "lifetime": 2.0, "patch_size": 20.0},
+	{"interval": 0.35, "damage": 2, "lifetime": 2.5, "patch_size": 24.0},
+	{"interval": 0.30, "damage": 2, "lifetime": 3.0, "patch_size": 28.0},
+	{"interval": 0.25, "damage": 3, "lifetime": 3.5, "patch_size": 32.0},
+	{"interval": 0.20, "damage": 4, "lifetime": 4.0, "patch_size": 36.0},
 ]
 
 var level := 1
-var _cd := 0.25
+var _cd := 0.4
 var arena: Node = null
 var rate_scale := 1.0
-var _patches: Array[FirePatch] = []
+var _patch_cd := 0.0
 
 
 func _stats() -> Dictionary:
@@ -40,58 +40,56 @@ func _player_mods() -> Dictionary:
 
 
 func _process(delta: float) -> void:
-	if arena == null:
+	if arena == null or not is_instance_valid(arena):
 		return
-	# Only leave trail when moving
-	var player: PlayerSpark = arena.player
-	if player.move_dir.length_squared() < 0.01:
-		return
-	# Cooldown
 	var mods := _player_mods()
 	var rate_total: float = rate_scale * float(mods.get("rate_mult", 1.0))
+	# Always fire bolts at nearest enemy
 	_cd -= delta * rate_total
-	if _cd > 0.0:
-		return
-	_cd = float(_stats()["interval"])
-	# Spawn fire patch
-	var stats := _stats()
-	var dmg := int(ceilf(float(stats["damage"]) * float(mods.get("dmg_mult", 1.0))))
-	var patch := FirePatch.new()
-	patch.setup(global_position, dmg, float(stats["lifetime"]), float(stats["patch_size"]))
-	arena.world.add_child(patch)
-	_patches.append(patch)
-	# Tick damage to nearby enemies
-	_tick_damage(patch)
+	if _cd <= 0.0:
+		var target: ShadowEnemy = arena.nearest_enemy(global_position, RANGE)
+		if target != null:
+			_cd = float(_stats()["interval"])
+			var dmg := int(ceilf(float(_stats()["damage"]) * float(mods.get("dmg_mult", 1.0))))
+			var bolt: PulseBolt = arena.acquire_bolt()
+			var dir := global_position.direction_to(target.global_position)
+			var origin := global_position + (dir * PlayerSpark.RADIUS)
+			bolt.launch(origin, dir, dmg)
+			Audio.play("shoot", -8.0)
+	# Leave fire trail when moving
+	var player: PlayerSpark = arena.player
+	if player.move_dir.length_squared() > 0.01:
+		_patch_cd -= delta
+		if _patch_cd <= 0.0:
+			_patch_cd = 0.25
+			var stats := _stats()
+			var dmg := int(ceilf(float(stats["damage"]) * float(mods.get("dmg_mult", 1.0))))
+			var patch := FirePatch.new()
+			patch.setup(global_position, dmg, float(stats["lifetime"]), float(stats["patch_size"]))
+			arena.world.add_child(patch)
+			_tick_damage(patch)
 
 
 func _tick_damage(patch: FirePatch) -> void:
 	if arena == null:
 		return
-	# Copy enemy list to avoid modification during iteration
 	var snapshot: Array = arena.enemies.duplicate()
 	for e in snapshot:
 		if not is_instance_valid(e) or not e.active:
 			continue
 		var dist: float = patch.global_position.distance_to(e.global_position)
 		if dist < patch.size + e.radius:
-			hud_spawn_float(e.global_position, str(patch.damage), Color(1.0, 0.5, 0.0))
+			arena.hud.spawn_float(e.global_position, str(patch.damage), Color(1.0, 0.5, 0.0))
 			if e.take_hit(patch.damage):
 				arena.kill_enemy(e)
-	# Boss too
 	if arena._boss != null and arena._boss.active:
 		var dist: float = patch.global_position.distance_to(arena._boss.global_position)
 		if dist < patch.size + arena._boss.radius:
-			hud_spawn_float(arena._boss.global_position, str(patch.damage), Color(1.0, 0.5, 0.0))
+			arena.hud.spawn_float(arena._boss.global_position, str(patch.damage), Color(1.0, 0.5, 0.0))
 			if arena._boss.take_hit(patch.damage):
 				arena._on_boss_died(arena._boss)
 
 
-func hud_spawn_float(at: Vector2, text: String, col: Color) -> void:
-	if arena and arena.hud:
-		arena.hud.spawn_float(at, text, col)
-
-
-## FirePatch — a single fire patch on the ground
 class FirePatch extends Node2D:
 	var damage := 1
 	var life := 2.0
@@ -114,7 +112,6 @@ class FirePatch extends Node2D:
 
 	func _draw() -> void:
 		var alpha := 1.0 - (_age / life)
-		# Flickering fire
 		var flicker := 0.8 + 0.2 * sin(_age * 15.0)
 		draw_circle(Vector2.ZERO, size, Color(1.0, 0.4, 0.0, 0.15 * alpha * flicker))
 		draw_circle(Vector2.ZERO, size * 0.6, Color(1.0, 0.6, 0.1, 0.25 * alpha * flicker))

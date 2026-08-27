@@ -41,7 +41,7 @@ func _process(delta: float) -> void:
 		mods_speed = float((get_parent() as PlayerSpark).mods.get("rate_mult", 1.0))
 	angle = fposmod(angle + float(_stats()["omega"]) * rate_scale * mods_speed * delta, TAU)
 	queue_redraw()
-	if arena == null or arena._ending:
+	if arena == null or not is_instance_valid(arena) or arena._ending:
 		return
 
 	# Melee blade damage

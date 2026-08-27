@@ -521,6 +521,10 @@ func _process(delta: float) -> void:
 		return
 	if get_tree().paused:
 		return
+	# Safety: if weapon is null or freed, re-equip pulse
+	if weapon == null or not is_instance_valid(weapon):
+		weapon = null
+		_equip_weapon("pulse")
 	RunState.run_time += delta if not _ending else 0.0
 	_overdrive_left = maxf(0.0, _overdrive_left - delta)
 	var od := 1.85 if _overdrive_left > 0.0 else 1.0

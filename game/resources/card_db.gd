@@ -37,11 +37,17 @@ const WEAPON_UP_DEFS := {
 	"pulse": {"title": "Pulse Bolt+", "desc": "denser, meaner bolts"},
 	"orbit": {"title": "Orbit Blades+", "desc": "+1 blade, wider arc"},
 	"nova": {"title": "Nova Burst+", "desc": "bigger boom, shorter fuse"},
+	"lightning": {"title": "Lightning+", "desc": "more chains, more pain"},
+	"frost": {"title": "Frost Nova+", "desc": "bigger freeze, longer slow"},
+	"flame": {"title": "Flame Trail+", "desc": "hotter fire, bigger patches"},
 }
 
 const WEAPON_NEW_DEFS := {
 	"orbit": {"title": "ORBIT BLADES", "desc": "satellites orbit you — your body is the aim", "rarity": Rarity.UNCOMMON},
 	"nova": {"title": "NOVA BURST", "desc": "radial shockwave that shoves shadows back", "rarity": Rarity.UNCOMMON},
+	"lightning": {"title": "LIGHTNING CHAIN", "desc": "bolts that chain to nearby enemies", "rarity": Rarity.UNCOMMON},
+	"frost": {"title": "FROST NOVA", "desc": "area damage + slow around you", "rarity": Rarity.UNCOMMON},
+	"flame": {"title": "FLAME TRAIL", "desc": "leave burning ground while you move", "rarity": Rarity.UNCOMMON},
 }
 
 
