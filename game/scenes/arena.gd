@@ -31,7 +31,6 @@ var pickups: Array[Pickup] = []
 var funny_enemies: Array[FunnyEnemy] = []
 var rings: Array[FxRing] = []
 var _boss: Boss = null
-var _miniboss: MiniBoss = null
 var _boss_active := false
 
 # progression
@@ -135,9 +134,6 @@ func _set_biome(level_num: int) -> void:
 		biome_id = "sky"
 	grid.set_biome(biome_id)
 	Music.play_biome(biome_id)
-	# Spawn environmental hazards based on biome (deferred to ensure world/player exist)
-	if world != null and player != null:
-		_spawn_hazards(biome_id)
 	# Apply biome background tint
 	var bg_colors := {
 		"promenade": Color(0.02, 0.02, 0.04),
@@ -157,33 +153,6 @@ func _set_biome(level_num: int) -> void:
 	# Animate background color transition
 	var tween := create_tween()
 	tween.tween_property(bg, "color", new_bg, 1.0)
-
-
-func _spawn_hazards(biome_id: String) -> void:
-	if world == null or player == null:
-		return
-	# Clear existing hazards
-	for child in world.get_children():
-		if child is EnvHazard:
-			child.queue_free()
-	# Spawn biome-specific hazards
-	var count := 0
-	var kind: EnvHazard.Kind
-	match biome_id:
-		"promenade": return  # No hazards in first biome
-		"sewers":
-			kind = EnvHazard.Kind.TOXIC_PUDDLE
-			count = 3
-		"sky":
-			kind = EnvHazard.Kind.FALLING_DEBRIS
-			count = 4
-	for i in range(count):
-		var h := EnvHazard.new()
-		var angle := randf() * TAU
-		var dist := randf_range(300.0, 500.0)
-		var pos := player.global_position + Vector2.from_angle(angle) * dist
-		h.setup(kind, pos, self)
-		world.add_child(h)
 
 
 func _apply_permanent_upgrades() -> void:
@@ -259,9 +228,6 @@ func _build_level(n: int) -> void:
 	# Boss every 10 levels: 10, 20, 30, 40, 50...
 	if n > 0 and n % 10 == 0:
 		_spawn_queue.clear()
-	# Mini-boss every 5 levels: 5, 15, 25, 35...
-	elif n > 0 and n % 5 == 0:
-		_spawn_queue.clear()
 	else:
 		# Fisher-Yates with the run's seeded rng — same layout every replay of a seed.
 		for i in range(_spawn_queue.size() - 1, 0, -1):
@@ -278,9 +244,6 @@ func _build_level(n: int) -> void:
 	# Spawn boss every 10 levels
 	if n > 0 and n % 10 == 0:
 		_spawn_boss(n)
-	# Mini-boss every 5 levels
-	elif n > 0 and n % 5 == 0:
-		_spawn_miniboss(n)
 
 
 func _director(delta: float) -> void:
@@ -411,28 +374,13 @@ func _spawn_boss(level_num: int) -> void:
 	hud.show_banner("BOSS: %s" % Boss.STATS[boss_kind]["name"], Color(1.0, 0.2, 0.1), 2.0)
 	hud.show_boss_bar(Boss.STATS[boss_kind]["name"])
 	Music.play_boss()
-	# Boss intro: dramatic zoom + shake + vignette
-	shake(10.0)
+	# Boss intro: dramatic zoom + shake
+	shake(8.0)
 	var orig_zoom := camera.zoom
 	var tween := create_tween()
-	tween.tween_property(camera, "zoom", Vector2(1.4, 1.4), 0.25)
-	tween.tween_interval(0.6)
-	tween.tween_property(camera, "zoom", Vector2(1.1, 1.1), 0.15)
-	tween.tween_interval(0.3)
-	tween.tween_property(camera, "zoom", orig_zoom, 0.4)
-	# Red vignette flash for boss
-	hud.vignette.color = Color(1.0, 0.1, 0.05, 0.4)
-	# Boss spawn particles
-	for i in range(20):
-		var bp := CPUParticles2D.new()
-		bp.position = world.to_local(_boss.global_position)
-		bp.one_shot = true; bp.emitting = true; bp.amount = 4
-		bp.lifetime = 0.8; bp.explosiveness = 1.0; bp.spread = 180.0
-		bp.initial_velocity_min = 60.0; bp.initial_velocity_max = 200.0
-		bp.scale_amount_min = 1.5; bp.scale_amount_max = 4.0
-		bp.color = Color(1.0, 0.2, 0.1, 0.8)
-		world.add_child(bp)
-		get_tree().create_timer(1.0).timeout.connect(bp.queue_free)
+	tween.tween_property(camera, "zoom", Vector2(1.3, 1.3), 0.3)
+	tween.tween_interval(0.8)
+	tween.tween_property(camera, "zoom", orig_zoom, 0.5)
 
 
 func _on_boss_died(boss: Boss) -> void:
@@ -479,40 +427,6 @@ func _on_boss_died(boss: Boss) -> void:
 	)
 
 
-func _spawn_miniboss(level_num: int) -> void:
-	var kinds := [MiniBoss.Kind.SENTINEL, MiniBoss.Kind.CRAWLER, MiniBoss.Kind.ORACLE]
-	var pick: MiniBoss.Kind = kinds[(level_num / 5 - 1) % 3]
-	_miniboss = MiniBoss.new()
-	_miniboss.setup(pick, player, level_num)
-	_miniboss.died.connect(_on_miniboss_died)
-	world.add_child(_miniboss)
-	_miniboss.global_position = _ring_point()
-	Audio.play("level_start", -2.0)
-	hud.show_announcer("MINI-BOSS: " + _miniboss.kind_name(), Color(1.0, 0.6, 0.0))
-	hud.show_boss_bar("MINI-BOSS: " + _miniboss.kind_name())
-	shake(6.0)
-
-
-func _on_miniboss_died(mb: MiniBoss) -> void:
-	hud.hide_boss_bar()
-	shake(8.0)
-	Audio.play("elite_die", -2.0)
-	hud.show_announcer("MINI-BOSS DEFEATED", Color(0.0, 1.0, 0.5))
-	for i in range(3):
-		_acquire_mote().drop(mb.global_position + Vector2.from_angle(randf() * TAU) * 30.0, 2)
-	_acquire_pickup().spawn(Pickup.Kind.CRATE, mb.global_position)
-	RunState.add_gems(5)
-	hud.spawn_float(mb.global_position, "+5 GEMS", Color(1.0, 0.72, 0.0))
-	_spawn_death_shockwave(mb.global_position, Color(0.0, 1.0, 0.5, 0.7), 70.0)
-	mb.release()
-	_miniboss = null
-	# Clear remaining after miniboss
-	get_tree().create_timer(1.0).timeout.connect(func():
-		if _alive_enemies() == 0 and _spawn_queue.is_empty():
-			_level_cleared()
-	)
-
-
 func _spawn_one(kind) -> void:
 	# Handle funny enemies (string kind)
 	if kind is String:
@@ -551,14 +465,15 @@ func kill_funny_enemy(f: FunnyEnemy) -> void:
 	streak += 1
 	_streak_t = COMBO_WINDOW
 	Missions.track_kill()
-	if streak >= 3:
+	if streak >= 3 and hud != null:
 		hud.combo_pop(streak)
 		if streak == 3:
 			Audio.play("combo3", -5.0)
 			hud.show_announcer("TRIPLE KILL", Color(1.0, 0.94, 0.0))
 		elif streak == 5:
 			Audio.play("combo5", -4.0)
-			hud.show_announcer("MEGA KILL", Color(1.0, 0.45, 0.2))
+			if hud != null:
+				hud.show_announcer("MEGA KILL", Color(1.0, 0.45, 0.2))
 		elif streak == 10:
 			Audio.play("combo10", -3.0)
 			hud.show_announcer("ULTRA KILL", Color(1.0, 0.2, 0.2))
@@ -630,7 +545,7 @@ func kill_funny_enemy(f: FunnyEnemy) -> void:
 	f.active = false
 	_burst(f.global_position, s["eye"])
 	spawn_ring(f.global_position, 44.0, Color(s["eye"].r, s["eye"].g, s["eye"].b, 0.85))
-	if Settings.kill_flash:
+	if Settings.kill_flash and hud != null:
 		hud.flash_kill()
 	var _funny_pool: Array[String] = ["pop", "splat", "squeak", "crunch", "splat2", "boing", "squelch", "honk", "whomp", "doh", "oops"]
 	Audio.play(_funny_pool[rng.randi_range(0, _funny_pool.size() - 1)], -3.0)
@@ -822,7 +737,8 @@ func _process(delta: float) -> void:
 	# Safety: if weapon is null or freed, re-equip pulse
 	if weapon == null or not is_instance_valid(weapon):
 		weapon = null
-		_equip_weapon("pulse")
+		if player != null and is_instance_valid(player):
+			_equip_weapon("pulse")
 	RunState.run_time += delta if not _ending else 0.0
 	_overdrive_left = maxf(0.0, _overdrive_left - delta)
 	var od := 1.85 if _overdrive_left > 0.0 else 1.0
@@ -855,9 +771,6 @@ func _process(delta: float) -> void:
 	# Boss health bar
 	if _boss != null and _boss.active:
 		hud.update_boss_bar(_boss.hp, _boss.max_hp)
-		# Tick mini-boss
-	if _miniboss != null and _miniboss.active and is_instance_valid(_miniboss):
-		_miniboss._dir = (player.global_position - _miniboss.global_position).normalized()
 	# Tick funny enemies
 	for f in funny_enemies:
 		if f.active and is_instance_valid(f):
@@ -940,24 +853,18 @@ func _bolts_vs_enemies() -> void:
 				if _boss.take_hit(b.damage):
 					_on_boss_died(_boss)
 				continue
-		for e in enemies:
+		var snapshot_e := enemies.duplicate()
+		for e in snapshot_e:
 			if not e.active:
 				continue
 			if b.global_position.distance_squared_to(e.global_position) < pow(e.radius + 6.0, 2.0):
 				b.deactivate()
 				Audio.play("hit", -8.0)
-				hud.spawn_float(e.global_position, str(b.damage), Color(0.85, 0.95, 1.0))
+				if hud != null:
+					hud.spawn_float(e.global_position, str(b.damage), Color(0.85, 0.95, 1.0))
 				if e.take_hit(b.damage):
 					kill_enemy(e)
 				break
-				# Check mini-boss
-		if _miniboss != null and _miniboss.active:
-			if b.global_position.distance_squared_to(_miniboss.global_position) < pow(_miniboss.radius + 6.0, 2.0):
-				b.deactivate()
-				Audio.play("hit", -7.0)
-				hud.spawn_float(_miniboss.global_position, str(b.damage), Color(1.0, 0.6, 0.0))
-				if _miniboss.take_hit(b.damage):
-					_on_miniboss_died(_miniboss)
 		# Check funny enemies
 		for f in funny_enemies:
 			if not f.active:
@@ -982,16 +889,13 @@ func _orbs_tick(delta: float) -> void:
 func _enemies_vs_player() -> void:
 	if _ending:
 		return
-		# Boss contact damage
-	if _miniboss != null and _miniboss.active:
-		var mb_contact := _miniboss.radius + PlayerSpark.RADIUS - 3.0
-		if _miniboss.global_position.distance_squared_to(player.global_position) < mb_contact * mb_contact:
-			player.try_take_damage(_miniboss.damage, _miniboss.global_position)
+	var snapshot_enemies := enemies.duplicate()
+	# Boss contact damage
 	if _boss != null and _boss.active and not _boss._invulnerable:
 		var contact := _boss.radius + PlayerSpark.RADIUS - 3.0
 		if _boss.global_position.distance_squared_to(player.global_position) < contact * contact:
 			player.try_take_damage(_boss.damage, _boss.global_position)
-	for e in enemies:
+	for e in snapshot_enemies:
 		if not e.active:
 			continue
 		var contact := e.radius + PlayerSpark.RADIUS - 3.0
@@ -1008,7 +912,8 @@ func _enemies_vs_player() -> void:
 
 
 func _bomber_check() -> void:
-	for e in enemies:
+	var snapshot := enemies.duplicate()
+	for e in snapshot:
 		if not e.active:
 			continue
 		if e.should_explode():
@@ -1044,6 +949,8 @@ func _acquire_orb() -> SpitOrb:
 # ---------------------------------------------------------------- kills, FX, drops
 
 func kill_enemy(e: ShadowEnemy) -> void:
+	if not is_instance_valid(e) or not e.active:
+		return
 	RunState.kills += 1
 	streak += 1
 	_streak_t = COMBO_WINDOW
@@ -1082,29 +989,7 @@ func kill_enemy(e: ShadowEnemy) -> void:
 		shake(2.0)
 	var eye: Color = ShadowEnemy.STATS[e.kind]["eye"]
 	e.active = false
-	# Enemy-specific death effects
-	match e.kind:
-		ShadowEnemy.Kind.SHADE:
-			_spawn_death_shockwave(e.global_position, Color(eye.r, eye.g, eye.b, 0.7), 55.0)
-		ShadowEnemy.Kind.SWARMLET:
-			# Swarmlet: quick pop + scatter
-			_spawn_death_shockwave(e.global_position, Color(0.62, 0.4, 1.0, 0.6), 35.0)
-		ShadowEnemy.Kind.SPITTER:
-			# Spitter: goo splash
-			_spawn_death_shockwave(e.global_position, Color(1.0, 0.72, 0.0, 0.7), 50.0)
-		ShadowEnemy.Kind.BRUTE:
-			# Brute: massive ground pound effect
-			_spawn_death_shockwave(e.global_position, Color(1.0, 0.3, 0.1, 0.9), 90.0)
-			shake(8.0)
-			hud.spawn_float(e.global_position, "BRUTE DOWN", Color(1.0, 0.45, 0.2))
-		ShadowEnemy.Kind.PHANTOM:
-			# Phantom: dissolve into mist
-			_spawn_death_shockwave(e.global_position, Color(0.4, 0.9, 1.0, 0.5), 45.0)
-		ShadowEnemy.Kind.BOMBER:
-			# Bomber: explosion effect
-			_spawn_death_shockwave(e.global_position, Color(1.0, 0.5, 0.0, 0.9), 80.0)
-			shake(6.0)
-	_burst(e.global_position, eye, e.kind == ShadowEnemy.Kind.BRUTE or e.elite)
+	_burst(e.global_position, eye)
 	spawn_ring(e.global_position, 44.0, Color(eye.r, eye.g, eye.b, 0.85))
 	if Settings.kill_flash:
 		hud.flash_kill()
@@ -1206,49 +1091,28 @@ func _free_ring() -> FxRing:
 	return r
 
 
-func _burst(at: Vector2, col: Color, big := false) -> void:
-	# Enhanced burst: more particles, bigger when big=true
+func _burst(at: Vector2, col: Color) -> void:
 	var p := CPUParticles2D.new()
 	p.position = world.to_local(at)
 	p.one_shot = true
 	p.emitting = true
-	p.amount = 48 if big else 32
-	p.lifetime = 0.8 if big else 0.65
+	p.amount = 32
+	p.lifetime = 0.65
 	p.explosiveness = 1.0
 	p.spread = 180.0
 	p.gravity = Vector2.ZERO
-	p.initial_velocity_min = 120.0 if big else 90.0
-	p.initial_velocity_max = 380.0 if big else 290.0
-	p.damping_min = 140.0
-	p.damping_max = 240.0
-	p.scale_amount_min = 2.5 if big else 2.0
-	p.scale_amount_max = 6.0 if big else 4.8
-	p.rotation_min = -PI
-	p.rotation_max = PI
+	p.initial_velocity_min = 90.0
+	p.initial_velocity_max = 290.0
+	p.damping_min = 160.0
+	p.damping_max = 260.0
+	p.scale_amount_min = 2.0
+	p.scale_amount_max = 4.8
 	var ramp := Gradient.new()
 	ramp.set_color(0, Color.WHITE)
-	ramp.set_color(0.5, col)
-	ramp.set_color(1, Color(col.r, col.g, col.b, 0.0))
+	ramp.set_color(1, col)
 	p.color_ramp = ramp
 	world.add_child(p)
-	get_tree().create_timer(1.2).timeout.connect(p.queue_free)
-	# Second burst: slower, wider particles for depth
-	var p2 := CPUParticles2D.new()
-	p2.position = world.to_local(at)
-	p2.one_shot = true
-	p2.emitting = true
-	p2.amount = 16
-	p2.lifetime = 1.0
-	p2.explosiveness = 0.8
-	p2.spread = 180.0
-	p2.gravity = Vector2(0, 60.0)
-	p2.initial_velocity_min = 40.0
-	p2.initial_velocity_max = 120.0
-	p2.scale_amount_min = 3.0
-	p2.scale_amount_max = 7.0
-	p2.color = Color(col.r, col.g, col.b, 0.4)
-	world.add_child(p2)
-	get_tree().create_timer(1.5).timeout.connect(p2.queue_free)
+	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
 
 
 func _spawn_death_shockwave(at: Vector2, col: Color, radius: float) -> void:
@@ -1308,9 +1172,6 @@ func _begin_death() -> void:
 	SaveSystem.mark_run_finished(level, RunState.gems_earned, RunState.run_time)
 	SaveSystem.unlock_next_level(level)
 	Missions.track_run()
-	# Save infinite leaderboard score if past level 30
-	if level > 30:
-		SaveSystem.save_infinite_score(level, RunState.kills, RunState.run_time)
 	Missions.track_gems(RunState.gems_earned)
 	Missions.track_weapons_collected(owned_guns.size())
 	if RunState.deaths == 0:
