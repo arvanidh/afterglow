@@ -16,6 +16,7 @@ var show_combo_counter: bool = true
 var text_size: int = 1         # 0=small, 1=medium, 2=large
 var colorblind_mode: bool = false
 var high_contrast: bool = false
+var kill_flash: bool = true
 
 
 func _ready() -> void:
@@ -154,6 +155,7 @@ func _load() -> void:
 		text_size = int(parsed.get("text_size", 1))
 		colorblind_mode = bool(parsed.get("colorblind_mode", false))
 		high_contrast = bool(parsed.get("high_contrast", false))
+		kill_flash = bool(parsed.get("kill_flash", true))
 
 
 func _save() -> void:
@@ -171,6 +173,7 @@ func _save() -> void:
 		"text_size": text_size,
 		"colorblind_mode": colorblind_mode,
 		"high_contrast": high_contrast,
+		"kill_flash": kill_flash,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:

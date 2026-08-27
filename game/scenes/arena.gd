@@ -541,12 +541,11 @@ func kill_funny_enemy(f: FunnyEnemy) -> void:
 			hud.spawn_float(f.global_position, "+10 GEMS", Color(1.0, 0.72, 0.0))
 			_acquire_pickup().spawn(Pickup.Kind.CRATE, f.global_position + Vector2.from_angle(randf() * TAU) * 30.0)
 			_spawn_death_shockwave(f.global_position, Color(0.0, 1.0, 0.5, 0.8), 80.0)
+	f.active = false
 	_burst(f.global_position, s["eye"])
 	spawn_ring(f.global_position, 44.0, Color(s["eye"].r, s["eye"].g, s["eye"].b, 0.85))
-	Engine.time_scale = 0.15
-	await get_tree().create_timer(0.06, true, false, true).timeout
-	Engine.time_scale = 1.0
-	hud.flash_kill()
+	if Settings.kill_flash:
+		hud.flash_kill()
 	var _funny_pool: Array[String] = ["pop", "splat", "squeak", "crunch", "splat2", "boing", "squelch", "honk", "whomp", "doh", "oops"]
 	Audio.play(_funny_pool[rng.randi_range(0, _funny_pool.size() - 1)], -3.0)
 	if streak > 0 and streak % 5 == 0:
@@ -981,13 +980,11 @@ func kill_enemy(e: ShadowEnemy) -> void:
 		hud.spawn_float(e.global_position, "STREAK BONUS", Color(1.0, 0.72, 0.0))
 		shake(2.0)
 	var eye: Color = ShadowEnemy.STATS[e.kind]["eye"]
+	e.active = false
 	_burst(e.global_position, eye)
 	spawn_ring(e.global_position, 44.0, Color(eye.r, eye.g, eye.b, 0.85))
-	# Hitstop: brief freeze for impact feel
-	Engine.time_scale = 0.15
-	await get_tree().create_timer(0.06, true, false, true).timeout
-	Engine.time_scale = 1.0
-	hud.flash_kill()
+	if Settings.kill_flash:
+		hud.flash_kill()
 	# Funny kill sound — random from a big pool so it never gets repetitive
 	var _funny_pool: Array[String] = ["pop", "splat", "squeak", "crunch", "splat2", "boing", "squelch", "honk", "whomp", "doh", "oops"]
 	Audio.play(_funny_pool[rng.randi_range(0, _funny_pool.size() - 1)], -3.0)

@@ -299,6 +299,7 @@ func _open_settings() -> void:
 	content.add_child(_make_option("Text Size", text_sizes, Settings.text_size, func(i): Settings.set_text_size(i)))
 	content.add_child(_make_toggle("Colorblind Mode", Settings.colorblind_mode, func(): Settings.toggle_colorblind_mode()))
 	content.add_child(_make_toggle("High Contrast", Settings.high_contrast, func(): Settings.toggle_high_contrast()))
+	content.add_child(_make_toggle("Kill Flash", Settings.kill_flash, func(): Settings.toggle_kill_flash()))
 	# View Stats
 	var stats := Settings.get_stats()
 	var stats_panel := PanelContainer.new()
