@@ -178,6 +178,16 @@ func seed_hex() -> String:
 	return "%05X" % (absi(run_seed) % 1048576)
 
 
+func kill_all_tweens() -> void:
+
+	for tw in get_tree().get_processed_tweens():
+
+		if tw.is_valid():
+
+			tw.kill()
+
+
+
 func _exit_tree() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
