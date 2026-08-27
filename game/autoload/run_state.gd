@@ -14,11 +14,19 @@ var hp := 3
 var run_time := 0.0
 var start_level := 1
 var is_daily := false
+var is_boss_rush := false
+var boss_rush_wave := 0
+var boss_rush_time := 0.0
+var boss_rush_kills := 0
 
 
 func reset_run(lv: int = 1) -> void:
 	start_level = lv
 	is_daily = false
+	is_boss_rush = false
+	boss_rush_wave = 0
+	boss_rush_time = 0.0
+	boss_rush_kills = 0
 	shards = 0
 	gems_earned = 0
 	time_alive = 0.0
@@ -29,6 +37,13 @@ func reset_run(lv: int = 1) -> void:
 	shards_changed.emit(shards)
 	gems_changed.emit(gems_earned)
 
+
+func reset_boss_rush() -> void:
+	reset_run(1)
+	is_boss_rush = true
+	boss_rush_wave = 0
+	boss_rush_time = 0.0
+	boss_rush_kills = 0
 
 func add_shards(n: int) -> void:
 	shards += n

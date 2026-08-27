@@ -77,6 +77,13 @@ func _ready() -> void:
 		daily_label.add_theme_font_size_override("font_size", 14)
 		daily_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
 		$UI/CenterBox/VBox.add_child(daily_label)
+	# Boss Rush button
+	var boss_rush_btn := Button.new()
+	boss_rush_btn.text = "BOSS RUSH"
+	boss_rush_btn.custom_minimum_size = Vector2(200, 50)
+	boss_rush_btn.add_theme_font_size_override("font_size", 22)
+	boss_rush_btn.pressed.connect(_start_boss_rush)
+	$UI/CenterBox/VBox.add_child(boss_rush_btn)
 	var shop_btn := Button.new()
 	shop_btn.text = "SHOP"
 	shop_btn.custom_minimum_size = Vector2(200, 50)
@@ -128,6 +135,12 @@ func _start_run() -> void:
 func _start_daily() -> void:
 	RunState.reset_run()
 	RunState.is_daily = true
+	GameState.change_state(GameState.State.RUN)
+	get_tree().change_scene_to_file("res://scenes/arena.tscn")
+
+
+func _start_boss_rush() -> void:
+	RunState.reset_boss_rush()
 	GameState.change_state(GameState.State.RUN)
 	get_tree().change_scene_to_file("res://scenes/arena.tscn")
 

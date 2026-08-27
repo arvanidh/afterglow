@@ -200,3 +200,27 @@ func get_infinite_board() -> Array:
 func get_best_infinite_level() -> int:
 	var data := load_save()
 	return int(data.get("best_infinite_level", 0))
+
+
+# --- Boss Rush leaderboard ---
+func save_boss_rush(time: float, kills: int) -> void:
+	var data := load_save()
+	var board: Array = data.get("boss_rush_board", [])
+	board.append({"time": snappedf(time, 0.1), "kills": kills, "date": Time.get_datetime_string_from_system()})
+	board.sort_custom(func(a, b): return a["time"] < b["time"])  # fastest time wins
+	if board.size() > 10:
+		board.resize(10)
+	data["boss_rush_board"] = board
+	# Also save best time
+	var prev_best: float = float(data.get("boss_rush_best_time", 999999.0))
+	if time < prev_best:
+		data["boss_rush_best_time"] = time
+	save(data)
+
+
+func get_boss_rush_board() -> Array:
+	return load_save().get("boss_rush_board", [])
+
+
+func get_boss_rush_best_time() -> float:
+	return float(load_save().get("boss_rush_best_time", 0.0))

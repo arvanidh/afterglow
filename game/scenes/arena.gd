@@ -67,6 +67,7 @@ var _cam_tilt := 0.0
 var _synergy := "none"
 var _ending := false
 var _results_ready := false
+var _boss_rush_wave := 0
 
 # bioweather
 var _weather_biome := "promenade"
@@ -143,11 +144,14 @@ func _ready() -> void:
 	owned_guns = [start_wep]
 	_build_level(RunState.start_level)
 	Audio.play("level_start")
-	hud.show_banner("LEVEL %d" % RunState.start_level, Color(0.0, 0.94, 1.0))
+	if RunState.is_boss_rush:
+		hud.show_banner("BOSS RUSH", Color(1.0, 0.2, 0.1), 2.0)
+	else:
+		hud.show_banner("LEVEL %d" % RunState.start_level, Color(0.0, 0.94, 1.0))
 	hud.refresh_hp(player.effective_max_hp())
 	hud.set_xp(0.0, plevel)
 	hud.set_gems(RunState.gems_earned)
-	Analytics.design_event("run_start", {"seed": seed_hex(), "biome": "promenade"})
+	Analytics.design_event("run_start", {"seed": seed_hex(), "biome": "promenade", "boss_rush": RunState.is_boss_rush})
 
 
 func _set_biome(level_num: int) -> void:
@@ -227,6 +231,28 @@ func _exit_tree() -> void:
 # ---------------------------------------------------------------- levels (fixed enemy counts)
 
 func _build_level(n: int) -> void:
+	# Boss Rush mode: skip normal wave building — spawn bosses directly
+	if RunState.is_boss_rush:
+		_boss_rush_wave += 1
+		RunState.boss_rush_wave = _boss_rush_wave
+		if _boss_rush_wave > 3:
+			_boss_rush_victory()
+			return
+		# Heal + reward between boss waves
+		if _boss_rush_wave > 1 and player != null and is_instance_valid(player):
+			player.heal(2)
+			hud.refresh_hp(player.effective_max_hp())
+			RunState.add_gems(5)
+			hud.spawn_float(player.global_position, "+2 HP +5 GEMS", Color(0.0, 1.0, 0.5))
+		var boss_kinds := [Boss.Kind.WATCHER, Boss.Kind.DEVOURER, Boss.Kind.VOID]
+		var wave_name := ["WAVE 1", "WAVE 2", "FINAL WAVE"][_boss_rush_wave - 1]
+		hud.show_announcer(wave_name, Color(1.0, 0.2, 0.1), 1.5)
+		# Spawn boss after short delay
+		get_tree().create_timer(1.0).timeout.connect(func():
+			if is_instance_valid(self) and not _ending:
+				_spawn_boss_for_wave(boss_kinds[_boss_rush_wave - 1])
+		)
+		return
 	_spawn_queue.clear()
 	# Infinite mode: caps grow after level 30
 	var inf := maxi(n - 30, 0)
@@ -295,6 +321,9 @@ func _build_level(n: int) -> void:
 
 func _director(delta: float) -> void:
 	if _ending or get_tree().paused:
+		return
+	# Boss Rush: skip normal wave spawning and level clear logic
+	if RunState.is_boss_rush:
 		return
 	if _in_between:
 		_between_timer -= delta
@@ -497,11 +526,66 @@ func _on_boss_died(boss: Boss) -> void:
 		get_tree().create_timer(2.0).timeout.connect(p.queue_free)
 	_boss.release()
 	_boss = null
-	# Mark level cleared after boss death
-	get_tree().create_timer(1.5).timeout.connect(func():
-		if is_instance_valid(self) and not _ending:
-			_level_cleared()
-	)
+	# Boss Rush: advance to next wave after boss death
+	if RunState.is_boss_rush:
+		get_tree().create_timer(2.0).timeout.connect(func():
+			if is_instance_valid(self) and not _ending:
+				_build_level(level)  # triggers next boss rush wave
+		)
+	else:
+		# Normal mode: mark level cleared after boss death
+		get_tree().create_timer(1.5).timeout.connect(func():
+			if is_instance_valid(self) and not _ending:
+				_level_cleared()
+		)
+
+
+func _spawn_boss_for_wave(kind: Boss.Kind) -> void:
+	# Reuse existing _spawn_boss logic but with a specific kind
+	_boss = Boss.new()
+	_boss.setup(kind, player)
+	_boss.died.connect(_on_boss_died)
+	world.add_child(_boss)
+	_boss.global_position = _ring_point()
+	_boss_active = true
+	Audio.play("level_start", -1.0)
+	hud.show_announcer(Boss.STATS[kind]["name"], Color(1.0, 0.2, 0.1))
+	hud.show_banner("BOSS: %s" % Boss.STATS[kind]["name"], Color(1.0, 0.2, 0.1), 2.0)
+	hud.show_boss_bar(Boss.STATS[kind]["name"])
+	Music.play_boss()
+	shake(8.0)
+	var orig_zoom := camera.zoom
+	var tween := create_tween()
+	tween.tween_property(camera, "zoom", Vector2(1.3, 1.3), 0.3)
+	tween.tween_interval(0.8)
+	tween.tween_property(camera, "zoom", orig_zoom, 0.5)
+
+
+func _boss_rush_victory() -> void:
+	# All 3 bosses defeated!
+	_ending = true
+	_boss_active = false
+	Audio.play("level_clear", -2.0)
+	shake(10.0)
+	RunState.boss_rush_time = RunState.run_time
+	RunState.boss_rush_kills = RunState.kills
+	SaveSystem.save_boss_rush(RunState.run_time, RunState.kills)
+	# Big celebration — drop tons of loot
+	if player != null and is_instance_valid(player):
+		for i in range(20):
+			var drop_pos: Vector2 = player.global_position + Vector2.from_angle(randf() * TAU) * 100.0
+			_acquire_mote().drop(drop_pos, 3)
+	RunState.add_gems(25)
+	# Dramatic pause, then show results
+	await get_tree().create_timer(2.0, true, false, true).timeout
+	Engine.time_scale = 1.0
+	GameState.change_state(GameState.State.RESULTS)
+	SaveSystem.mark_run_finished(99, RunState.gems_earned, RunState.run_time)
+	Missions.track_run()
+	Missions.track_gems(RunState.gems_earned)
+	hud.build_results(RunState.run_time, seed_hex(), 99, true)  # is_victory = true
+	await get_tree().create_timer(0.6, true, false, true).timeout
+	_results_ready = true
 
 
 func _spawn_hazards(n: int) -> void:
