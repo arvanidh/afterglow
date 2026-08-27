@@ -135,8 +135,9 @@ func _set_biome(level_num: int) -> void:
 		biome_id = "sky"
 	grid.set_biome(biome_id)
 	Music.play_biome(biome_id)
-	# Spawn environmental hazards based on biome
-	_spawn_hazards(biome_id)
+	# Spawn environmental hazards based on biome (deferred to ensure world/player exist)
+	if world != null and player != null:
+		_spawn_hazards(biome_id)
 	# Apply biome background tint
 	var bg_colors := {
 		"promenade": Color(0.02, 0.02, 0.04),
@@ -159,6 +160,8 @@ func _set_biome(level_num: int) -> void:
 
 
 func _spawn_hazards(biome_id: String) -> void:
+	if world == null or player == null:
+		return
 	# Clear existing hazards
 	for child in world.get_children():
 		if child is EnvHazard:
@@ -498,7 +501,7 @@ func _on_miniboss_died(mb: MiniBoss) -> void:
 	for i in range(3):
 		_acquire_mote().drop(mb.global_position + Vector2.from_angle(randf() * TAU) * 30.0, 2)
 	_acquire_pickup().spawn(Pickup.Kind.CRATE, mb.global_position)
-	_runState.add_gems(5)
+	RunState.add_gems(5)
 	hud.spawn_float(mb.global_position, "+5 GEMS", Color(1.0, 0.72, 0.0))
 	_spawn_death_shockwave(mb.global_position, Color(0.0, 1.0, 0.5, 0.7), 70.0)
 	mb.release()
