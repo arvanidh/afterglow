@@ -191,6 +191,7 @@ func kill_all_tweens() -> void:
 func _exit_tree() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
+	kill_all_tweens()
 
 
 # ---------------------------------------------------------------- levels (fixed enemy counts)
@@ -295,7 +296,7 @@ func _director(delta: float) -> void:
 		p.color = Color(1.0, 0.72, 0.0, 0.7)
 		world.add_child(p)
 		get_tree().create_timer(0.6).timeout.connect(p.queue_free)
-	if _spawn_queue.is_empty() and _alive_enemies() == 0 and _alive_funny() == 0 and not get_tree().paused:
+	if _spawn_queue.is_empty() and _alive_enemies() == 0 and _alive_funny() == 0 and not _boss_active and not get_tree().paused:
 		_level_cleared()
 
 
@@ -308,6 +309,11 @@ func _alive_enemies() -> int:
 
 
 func _level_cleared() -> void:
+	# Guard: don't double-fire (boss timer + director can both trigger)
+	if _in_between or _ending:
+		return
+	if player == null or hud == null or not is_instance_valid(player) or not is_instance_valid(hud):
+		return
 	_in_between = true
 	_between_timer = BETWEEN_LEVELS
 	RunState.hp = mini(RunState.hp + 1, player.effective_max_hp())
@@ -395,6 +401,8 @@ func _spawn_boss(level_num: int) -> void:
 
 func _on_boss_died(boss: Boss) -> void:
 	_boss_active = false
+	if hud == null or not is_instance_valid(hud):
+		return
 	hud.hide_boss_bar()
 	# Boss death effects
 	shake(12.0)
@@ -433,7 +441,8 @@ func _on_boss_died(boss: Boss) -> void:
 	_boss = null
 	# Mark level cleared after boss death
 	get_tree().create_timer(1.5).timeout.connect(func():
-		_level_cleared()
+		if is_instance_valid(self) and not _ending:
+			_level_cleared()
 	)
 
 
@@ -617,8 +626,8 @@ func _equip_weapon(id: String, first := false) -> void:
 		weapon.level = gun_lv[id]
 	player.add_child(weapon)
 	# Reset cooldown so shooting resumes instantly
-	# Reset cooldown - use set() which handles missing properties gracefully
-	weapon.set("_cd", 0.0)
+	if "_cd" in weapon:
+		weapon._cd = 0.0
 	hud.set_gun(weapon.DISPLAY_NAME, weapon.level)
 
 
@@ -724,7 +733,12 @@ func _apply_card(card: Dictionary) -> void:
 			if not owned_guns.has(target):
 				owned_guns.append(target)
 			gun_lv[target] = maxi(int(gun_lv.get(target, 1)), 1)
-			_equip_weapon(target)
+			# Only equip if it's a different weapon than current — don't disrupt active shooting
+			if current_gun_id() != target:
+				_equip_weapon(target)
+			elif weapon != null:
+				weapon.level_up()
+				hud.set_gun(String(WEAPON_CLASSES[target].DISPLAY_NAME), weapon.level)
 		"passive":
 			passives[target] = int(passives.get(target, 0)) + 1
 			player.apply_passive(target)
@@ -740,7 +754,9 @@ func _apply_card(card: Dictionary) -> void:
 # ---------------------------------------------------------------- main loop
 
 func _process(delta: float) -> void:
-	if hud == null:
+	if hud == null or player == null or world == null:
+		return
+	if not is_instance_valid(hud) or not is_instance_valid(player) or not is_instance_valid(world):
 		return
 	if get_tree().paused:
 		return
@@ -757,6 +773,9 @@ func _process(delta: float) -> void:
 	var total_rate := od * combo_bonus
 	if weapon != null:
 		weapon.rate_scale = total_rate
+		# Weapon watchdog: if _cd is stuck above interval for 2+ seconds, force-reset
+		if weapon._cd > 1.0:
+			weapon._cd = 0.0
 	if _overdrive_left > 0.0:
 		hud.set_powerup("OVERDRIVE %ds" % ceili(_overdrive_left))
 	elif hud.powerup_label.text != "":
@@ -1163,6 +1182,8 @@ func _spawn_death_shockwave(at: Vector2, col: Color, radius: float) -> void:
 # ---------------------------------------------------------------- damage & death
 
 func _on_player_took_damage(current_hp: int) -> void:
+	if hud == null or not is_instance_valid(hud):
+		return
 	# Damage flash: red pulse
 	hud.flash_damage()
 	hud.refresh_hp(player.effective_max_hp())
@@ -1180,6 +1201,8 @@ func _begin_death() -> void:
 	if _ending:
 		return
 	_ending = true
+	# Kill pending boss timers to prevent post-free crashes
+	_boss_active = false
 	RunState.deaths += 1
 	get_tree().paused = false
 	Engine.time_scale = 0.25
