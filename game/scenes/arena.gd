@@ -108,7 +108,7 @@ func _ready() -> void:
 	_equip_weapon("pulse", true)
 	_build_level(RunState.start_level)
 	Audio.play("level_start")
-	hud.show_banner("LEVEL 1", Color(0.0, 0.94, 1.0))
+	hud.show_banner("LEVEL %d" % RunState.start_level, Color(0.0, 0.94, 1.0))
 	hud.refresh_hp(player.effective_max_hp())
 	hud.set_xp(0.0, plevel)
 	hud.set_gems(RunState.gems_earned)

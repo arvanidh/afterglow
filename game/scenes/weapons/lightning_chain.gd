@@ -85,10 +85,9 @@ func _fire_chain(target: ShadowEnemy, dmg: int) -> void:
 
 
 func _draw_lightning(from: Vector2, to: Vector2) -> void:
-	# Draw a jagged lightning bolt
+	# Use CPUParticles2D for lightning visual — spawn along the bolt path
 	var segments := 6
 	var dir := from.direction_to(to)
-	var dist := from.distance_to(to)
 	var perp := Vector2(-dir.y, dir.x)
 	var points := PackedVector2Array([from])
 	for i in range(1, segments):
@@ -97,18 +96,24 @@ func _draw_lightning(from: Vector2, to: Vector2) -> void:
 		var offset := perp * randf_range(-20.0, 20.0) * (1.0 - absf(t - 0.5) * 2.0)
 		points.append(pos + offset)
 	points.append(to)
-	# Draw glow
-	var glow_col := Color(0.4, 0.9, 1.0, 0.3)
-	for i in range(points.size() - 1):
-		draw_line(points[i], points[i + 1], glow_col, 6.0)
-	# Draw core
-	var core_col := Color(0.75, 1.0, 1.0, 0.9)
-	for i in range(points.size() - 1):
-		draw_line(points[i], points[i + 1], core_col, 2.0)
-	# Auto-fade the visual
-	var tween := create_tween()
-	tween.tween_property(self, "modulate:a", 0.0, 0.15)
-	tween.tween_callback(queue_free)
+	# Spawn particles along bolt path for visual effect
+	for i in range(points.size()):
+		var p := CPUParticles2D.new()
+		p.position = points[i]
+		p.one_shot = true
+		p.emitting = true
+		p.amount = 3
+		p.lifetime = 0.2
+		p.explosiveness = 1.0
+		p.spread = 180.0
+		p.gravity = Vector2.ZERO
+		p.initial_velocity_min = 20.0
+		p.initial_velocity_max = 60.0
+		p.scale_amount_min = 2.0
+		p.scale_amount_max = 5.0
+		p.color = Color(0.5, 0.9, 1.0, 0.9)
+		arena.world.add_child(p)
+		arena.get_tree().create_timer(0.4).timeout.connect(p.queue_free)
 
 
 func hud_spawn_float(at: Vector2, text: String, col: Color) -> void:
