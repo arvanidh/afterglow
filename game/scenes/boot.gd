@@ -344,15 +344,27 @@ func _open_level_map() -> void:
 	progress.add_theme_font_size_override("font_size", 16)
 	progress.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
 	content.add_child(progress)
-	# Build level grid: 3 columns
+	# Build level grid: 3 columns with biome headers
+	var biome_names := {1: "THE PROMENADE", 11: "NEON SEWERS", 21: "SKY RUINS"}
+	var biome_colors := {1: Color(0.0, 0.94, 1.0), 11: Color(0.3, 1.0, 0.2), 21: Color(0.8, 0.4, 1.0)}
 	var row_hbox: HBoxContainer = null
 	for i in range(TOTAL_LEVELS):
+		var lv := i + 1
+		# Add biome header at start of each biome
+		if biome_names.has(lv):
+			var hdr := Label.new()
+			hdr.text = biome_names[lv]
+			hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			hdr.add_theme_font_size_override("font_size", 18)
+			hdr.add_theme_color_override("font_color", biome_colors[lv])
+			hdr.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+			hdr.add_theme_constant_override("shadow_offset_y", 1)
+			content.add_child(hdr)
 		if i % 3 == 0:
 			row_hbox = HBoxContainer.new()
 			row_hbox.add_theme_constant_override("separation", 10)
 			row_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 			content.add_child(row_hbox)
-		var lv := i + 1
 		var unlocked := lv <= highest
 		var star_count := int(stars.get(str(lv), 0))
 		var node := _make_level_node(lv, unlocked, star_count)

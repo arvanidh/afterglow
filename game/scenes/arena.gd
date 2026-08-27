@@ -82,6 +82,8 @@ func _ready() -> void:
 	world.add_child(player)
 	# Apply permanent upgrades from SaveSystem
 	_apply_permanent_upgrades()
+	# Set biome based on starting level
+	_set_biome(RunState.start_level)
 
 	camera = Camera2D.new()
 	camera.position_smoothing_enabled = true
@@ -111,6 +113,24 @@ func _ready() -> void:
 	hud.set_xp(0.0, plevel)
 	hud.set_gems(RunState.gems_earned)
 	Analytics.design_event("run_start", {"seed": seed_hex(), "biome": "promenade"})
+
+
+func _set_biome(level_num: int) -> void:
+	var biome_id := "promenade"
+	if level_num > 10 and level_num <= 20:
+		biome_id = "sewers"
+	elif level_num > 20:
+		biome_id = "sky"
+	grid.set_biome(biome_id)
+	# Change background color based on biome
+	var bg_colors := {
+		"promenade": Color(0.02, 0.02, 0.04),
+		"sewers": Color(0.01, 0.03, 0.01),
+		"sky": Color(0.02, 0.01, 0.04),
+	}
+	var viewport_bg := get_viewport()
+	if viewport_bg:
+		viewport_bg.get_camera_2d()  # ensure camera exists
 
 
 func _apply_permanent_upgrades() -> void:
@@ -168,6 +188,8 @@ func _build_level(n: int) -> void:
 	_in_between = false
 	_spawn_timer = 0.3
 	hud.set_level(n, _spawn_queue.size())
+	# Change biome when crossing level boundaries
+	_set_biome(n)
 	# Spawn boss at levels 10, 20, 30
 	if n == 10 or n == 20 or n == 30:
 		_spawn_boss(n)
