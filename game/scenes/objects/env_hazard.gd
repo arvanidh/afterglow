@@ -38,12 +38,13 @@ func _process(delta: float) -> void:
 	_timer += delta
 	_phase += delta * 3.0
 	_flash = maxf(0.0, _flash - delta * 4.0)
-	# Check player collision
-	if arena != null and arena.player != null:
+	# Check player collision (with cooldown)
+	if arena != null and arena.player != null and _timer > 1.0:
 		var dist := global_position.distance_to(arena.player.global_position)
 		if dist < radius + PlayerSpark.RADIUS:
 			arena.player.try_take_damage(damage, global_position)
 			_flash = 0.3
+			_timer = 0.0
 	match kind:
 		Kind.FALLING_DEBRIS:
 			# Debris falls periodically
@@ -85,7 +86,7 @@ func _draw() -> void:
 			for i in range(6):
 				var a := float(i) * TAU / 6.0
 				var r := radius * (0.6 + 0.4 * abs(sin(a * 3.0 + _phase)))
-				points.append(Vector2.from_angle(a) * r)
+				pts.append(Vector2.from_angle(a) * r)
 			draw_colored_polygon(PackedVector2Array([Vector2.ZERO] + pts), Color(0.6, 0.3, 1.0, 0.2))
 			draw_polyline(PackedVector2Array(pts + PackedVector2Array([pts[0]])), Color(0.7, 0.4, 1.0, 0.5), 2.0)
 	# Flash on hit
